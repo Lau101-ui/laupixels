@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#08090d">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="LAUPIXELS — Wallpapers with a point of view">
+<meta property="og:description" content="A screen-specific visual archive for people with taste.">
+<meta property="og:type" content="website">
+<meta name="description" content="A high-quality wallpaper gallery that adapts to your phone screen.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>LAUPIXELS — Wallpapers for your screen</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
+:root{color-scheme:dark;--bg:#08090d;--panel:#11131a;--muted:#9395a1;--text:#f4f1eb;--line:#292a31;--lime:#d9ff6b;--pink:#ff6d8e;--blue:#7aa8ff;--mono:'DM Mono',monospace;--sans:'Manrope',Inter,system-ui,sans-serif}
+html{scroll-behavior:smooth}body{font-family:var(--sans)}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.11;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E")}
+.wrap{position:relative;z-index:1}
+
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}button,input{font:inherit}button{cursor:pointer}
+.wrap{max-width:1240px;margin:auto;padding:0 17px 55px}header{height:70px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);gap:12px}
+.brand{font-weight:950;letter-spacing:.17em;font-size:17px}.brand span{color:var(--lime)}.head-actions{display:flex;gap:8px;align-items:center}.device-mini{font-size:11px;color:var(--muted);text-align:right;max-width:210px}
+.install{display:none;background:var(--lime);color:#11170b;border:0;border-radius:999px;padding:9px 13px;font-size:11px;font-weight:900}.install.show{display:block}
+.hero{padding:45px 0 26px;display:grid;grid-template-columns:1.2fr .8fr;gap:25px;align-items:end}.eyebrow{font-size:10px;letter-spacing:.22em;color:var(--lime);font-weight:900;text-transform:uppercase}
+h1{font-size:clamp(42px,7vw,78px);line-height:.94;letter-spacing:-.07em;margin:13px 0 16px}.sub{max-width:560px;color:var(--muted);margin:0}
+.device-card{border:1px solid var(--line);border-radius:17px;background:linear-gradient(145deg,#1b2431,#10141d);padding:17px}.device-card strong{font-size:14px}.device-card p{margin:5px 0;color:var(--muted);font-size:12px}.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.chip{border:1px solid #354052;color:#c6cfdb;border-radius:99px;padding:5px 9px;font-size:10px}
+.section-head{display:flex;justify-content:space-between;align-items:end;gap:12px;margin:26px 0 13px}.section-head h2{font-size:18px;margin:0;letter-spacing:-.03em}.section-head p{font-size:11px;color:var(--muted);margin:3px 0 0}
+.categories{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;scrollbar-width:none}.categories::-webkit-scrollbar{display:none}
+.cat{flex:0 0 auto;border:1px solid var(--line);background:#111722;color:#b8c2d0;border-radius:999px;padding:9px 14px;font-size:11px}.cat.active{background:var(--lime);border-color:var(--lime);color:#10160b;font-weight:900}
+.controls{display:flex;gap:9px;justify-content:space-between;align-items:center;margin:9px 0 15px;flex-wrap:wrap}.search{width:min(100%,280px);background:#111722;border:1px solid var(--line);border-radius:99px;padding:11px 14px;color:white;outline:none}.sort{background:#111722;border:1px solid var(--line);border-radius:99px;color:#dbe1e9;padding:10px 13px;font-size:11px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.wall{position:relative;aspect-ratio:.73;overflow:hidden;border-radius:15px;background:#151b25;border:1px solid #252e3a}.wall img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .45s}.wall:hover img{transform:scale(1.04)}
+.overlay{position:absolute;inset:auto 0 0;padding:45px 12px 12px;background:linear-gradient(transparent,rgba(0,0,0,.88));display:flex;justify-content:space-between;align-items:end;gap:7px}.wall-title{font-size:13px;font-weight:800}.wall-sub{font-size:10px;color:#c3ccd6;margin-top:3px}.view{background:var(--lime);color:#11170b;border:0;border-radius:99px;padding:9px 11px;font-size:10px;font-weight:900;white-space:nowrap}
+.empty{grid-column:1/-1;text-align:center;padding:50px 15px;color:var(--muted)}
+footer{border-top:1px solid var(--line);margin-top:32px;padding-top:17px;color:#788495;font-size:10px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.modal-bg{position:fixed;inset:0;background:#000d;z-index:5;display:none;align-items:center;justify-content:center;padding:14px}.modal-bg.open{display:flex}.modal{width:min(940px,100%);max-height:94dvh;overflow:auto;display:grid;grid-template-columns:1.15fr .85fr;background:#10151e;border:1px solid #303a49;border-radius:18px}.visual{min-height:470px;background:#05070a;display:flex;align-items:center;justify-content:center}.visual img{width:100%;height:100%;max-height:85dvh;object-fit:contain}.info{padding:23px}.close{float:right;border:0;border-radius:50%;width:34px;height:34px;background:#273140;color:white;font-size:19px}.info h2{font-size:28px;letter-spacing:-.05em;margin:45px 0 5px}.info p{font-size:12px;color:var(--muted)}.primary,.outline{width:100%;border-radius:10px;padding:13px;margin-top:10px;font-weight:900}.primary{background:var(--lime);border:0;color:#11170b}.outline{background:transparent;border:1px solid #394456;color:#eef2f7}.hint{font-size:10px;color:#8490a0;margin-top:14px}
+@media(max-width:850px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:600px){.wrap{padding:0 12px 42px}header{height:62px}.hero{grid-template-columns:1fr;padding:34px 0 18px;gap:16px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.wall{border-radius:12px}.overlay{padding:39px 9px 9px}.wall-title{font-size:12px}.view{padding:8px 9px;font-size:9px}.device-mini{max-width:125px}.modal{grid-template-columns:1fr}.visual{height:45dvh;min-height:250px}.visual img{max-height:45dvh}.info{padding:17px}.info h2{margin:12px 0 5px}}
+
+/* LAUPIXELS visual system */
+header{height:82px;border-color:#24252b}
+.brand{font-size:15px;letter-spacing:.21em}
+.brand span{color:var(--lime)}
+.hero{min-height:460px;padding:58px 0 42px;position:relative;isolation:isolate}
+.hero:after{content:"";position:absolute;z-index:-1;right:4%;top:7%;width:min(38vw,420px);aspect-ratio:1;border-radius:48% 52% 62% 38%;background:radial-gradient(circle at 35% 32%,#f7ffb1 0,#c3e65d 13%,#7a8b42 28%,#39402a 42%,#1b1d23 64%,transparent 70%);filter:blur(.2px);transform:rotate(-22deg);animation:orb 13s ease-in-out infinite alternate}
+@keyframes orb{from{transform:rotate(-22deg) translate3d(0,0,0) scale(.94);border-radius:48% 52% 62% 38%}to{transform:rotate(12deg) translate3d(-18px,12px,0) scale(1.05);border-radius:59% 41% 40% 60%}}
+h1{font-size:clamp(52px,8vw,104px);max-width:880px;font-weight:800;letter-spacing:-.085em;line-height:.86}
+h1 em{font-style:normal;color:var(--lime)}
+.eyebrow,.section-head p,.device-mini,.chip,.cat,.sort,.wall-sub,footer{font-family:var(--mono)}
+.device-card{background:rgba(16,18,24,.8);backdrop-filter:blur(18px);border-color:#34363d;box-shadow:0 18px 70px #0007}
+.device-card:before{content:"LIVE DEVICE PROFILE / 001";font:9px var(--mono);color:var(--lime);letter-spacing:.13em;display:block;margin-bottom:9px}
+.section-head{margin-top:32px}
+.section-head h2{font-size:23px;letter-spacing:-.055em}
+.cat{border-radius:4px;padding:10px 14px;text-transform:uppercase;letter-spacing:.06em}
+.cat.active{background:var(--lime);box-shadow:0 0 25px #d9ff6b28}
+.search,.sort{border-radius:4px;background:#111219;border-color:#33343d}
+.wall{border-radius:3px;border-color:#282a32;aspect-ratio:.70;transition:transform .4s,border-color .4s}
+.wall:nth-child(4n+1){transform:translateY(15px)}
+.wall:nth-child(4n+3){transform:translateY(-7px)}
+.wall:hover{transform:translateY(-5px) scale(1.012);border-color:#d9ff6b88}
+.wall img{filter:saturate(.91);transition:transform .8s cubic-bezier(.2,.7,.1,1),filter .5s}
+.wall:hover img{transform:scale(1.075);filter:saturate(1.12)}
+.overlay{padding:60px 13px 14px}
+.view{border-radius:3px;background:var(--lime);text-transform:uppercase;letter-spacing:.05em}
+.modal{border-radius:4px;border-color:#3c3e46}
+.primary,.outline,.close{border-radius:3px}
+footer{letter-spacing:.03em}
+.install{border-radius:3px;text-transform:uppercase;letter-spacing:.07em}
+@media(max-width:600px){.hero{min-height:auto;padding:43px 0 25px}.hero:after{width:57vw;right:-5%;top:1%;opacity:.58}h1{font-size:clamp(49px,14vw,76px)}.wall:nth-child(4n+1),.wall:nth-child(4n+3){transform:none}.wall:hover{transform:translateY(-3px)}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body><div class="wrap">
+<header><div class="brand">WALL<span>FORM</span></div><div class="head-actions"><div class="device-mini" id="miniDevice">Detecting device…</div><button class="install show" id="installBtn">Install LAUPIXELS ↗</button></div></header>
+<section class="hero"><div><div class="eyebrow">LAUPIXELS / Visual archive for your screen</div><h1>Not just a<br>wallpaper.<br><em>A point of view.</em></h1><p class="sub">Explore expressive art, anime, cars, music, landscapes and more. Preview first, then export a high-quality wallpaper fitted to your phone.</p></div>
+<div class="device-card"><strong id="deviceName">Detecting your device</strong><p id="deviceDetail">Reading browser and screen information…</p><div class="chips"><span class="chip" id="screenSize">Screen —</span><span class="chip" id="exportSize">Export —</span><span class="chip" id="pixelRatio">—</span></div></div></section>
+<div class="section-head"><div><h2>Find your frequency<span style="color:var(--lime)">.</span></h2><p>01 — SELECT A VISUAL LANGUAGE</p></div><div style="font:10px var(--mono);color:#777">CURATED / UPDATED OFTEN</div></div><nav class="categories" id="categories" aria-label="Wallpaper categories"></nav>
+<div class="controls"><input class="search" id="search" placeholder="Search wallpapers…" aria-label="Search wallpapers"><select class="sort" id="sort"><option value="featured">Featured</option><option value="az">Name A–Z</option></select></div>
+<main class="grid" id="grid"></main>
+<footer><span>LAUPIXELS · Personalise your phone</span><span>Internet required for first-time image loading · PWA offline shell</span></footer>
+</div>
+<div class="modal-bg" id="modal" role="dialog" aria-modal="true" aria-label="Wallpaper preview"><div class="modal"><div class="visual"><img id="bigImage" alt="Selected wallpaper"></div><div class="info"><button class="close" id="close" aria-label="Close">×</button><h2 id="bigTitle">Wallpaper</h2><p id="bigDesc"></p><div class="chips"><span class="chip" id="bigDimensions">—</span><span class="chip">JPEG · 96% quality</span></div><button class="primary" id="downloadFit">Download fitted wallpaper</button><button class="outline" id="downloadSource">Download large original</button><div class="hint">Fitted export crops to your screen's aspect ratio. Original download preserves the source image. Exact phone model detection depends on what the browser exposes.</div></div></div></div>
+<script>
+const collections=[
+["All","All"],["Anime","Anime"],["Cars","Cars"],["Graphic art","Graphic art"],["Expressive art","Expressive art"],["Musicians","Musicians"],["Nature","Nature"],["Architecture","Architecture"],["Gaming","Gaming"],["Abstract","Abstract"],["Space","Space"],["Minimal","Minimal"],["Streetwear","Streetwear"],["Photography","Photography"],["Dark aesthetic","Dark aesthetic"]
+];
+const wallpapers=[
+["Neon Drift","Cars","Night drive, motion blur and neon reflections","photo-1492144534655-ae79c964c9d7"],
+["JDM Legend","Cars","Performance-car detail with a cinematic finish","photo-1503376780353-7e6692767b70"],
+["Midnight Machine","Cars","Sculpted automotive design in low light","photo-1503736334956-4c8f8e92946d"],
+["Anime Sky","Anime","Dreamlike sky and cinematic colour","photo-1470252649378-9c29740c9fa8"],
+["Electric Bloom","Expressive art","Vivid colour, texture and energetic composition","photo-1541701494587-cb58502866ab"],
+["Chromatic Flow","Abstract","Fluid abstract colour and layered forms","photo-1550684848-fac1c5b4e853"],
+["Quiet Geometry","Graphic art","Minimal geometric shapes and contrast","photo-1550859492-d5da9d8e45f3"],
+["The Stage","Musicians","Concert lights and live-performance atmosphere","photo-1506157786151-b8491531f063"],
+["Vinyl Mood","Musicians","Warm analogue listening-room mood","photo-1461360228754-6e81c478b882"],
+["Alpine Silence","Nature","Mountain peaks and a quiet alpine lake","photo-1500530855697-b586d89ba3ee"],
+["Coastal Blue","Nature","Deep blue water and rugged coastline","photo-1500375592092-40eb2168fd21"],
+["Forest Light","Nature","Sunlight cutting through a green forest","photo-1441974231531-c6227db76b6e"],
+["Concrete Lines","Architecture","Clean architectural lines and strong contrast","photo-1487958449943-2429e8be8625"],
+["Future City","Gaming","Atmospheric futuristic cityscape","photo-1519608487953-e999c86e7455"],
+["Orbit","Space","A quiet, cosmic view of the universe","photo-1462331940025-496dfbfc7564"],
+["Soft Horizon","Minimal","Muted tones and a calm horizon","photo-1470770841072-f978cf4d019e"],
+["Street Texture","Streetwear","Urban texture and street-culture atmosphere","photo-1515886657613-9f3515b0c78f"],
+["Monochrome Form","Photography","A stark, high-contrast photographic study","photo-1519681393784-d120267933ba"],
+["After Hours","Dark aesthetic","Moody night photography and deep shadows","photo-1519608487953-e999c86e7455"],
+["Red Signal","Graphic art","Bold red visual language and sharp contrast","photo-1549490349-8643362247b5"]
+].map((x,i)=>({id:i+1,title:x[0],cat:x[1],desc:x[2],photo:x[3]}));
+const $=s=>document.querySelector(s);let category="All",chosen=null,installPrompt=null;
+const ua=navigator.userAgent||"",platform=navigator.userAgentData?.platform||navigator.platform||"",dpr=Math.min(devicePixelRatio||1,3),sw=screen.width,sh=screen.height;
+function detectDevice(){
+ let brand="Device",model="",os="";
+ const android=/Android/i.test(ua),ios=/iPhone|iPad|iPod/i.test(ua)||(/Macintosh/i.test(ua)&&navigator.maxTouchPoints>1);
+ if(android){os="Android";const patterns=[[/TECNO[\s_-]?([A-Z0-9 +_-]+)/i,"TECNO"],[/Infinix[\s_-]?([A-Z0-9 +_-]+)/i,"Infinix"],[/itel[\s_-]?([A-Z0-9 +_-]+)/i,"itel"],[/Redmi[\s_-]?([A-Z0-9 +_-]+)/i,"Redmi"],[/POCO[\s_-]?([A-Z0-9 +_-]+)/i,"POCO"],[/Xiaomi[\s_-]?([A-Z0-9 +_-]+)/i,"Xiaomi"],[/(SM-[A-Z0-9]+)/i,"Samsung"],[/((?:Galaxy\s)?(?:S|A|M|F|Z|Note)[0-9]{1,3}(?:\s?(?:Ultra|Plus|FE|Pro|5G|Fold|Flip))?)/i,"Samsung Galaxy"],[/(Pixel[\sA-Z0-9]+)/i,"Google Pixel"],[/(CPH[0-9]+)/i,"OPPO"],[/(V[0-9]{4}[A-Z]*)/i,"vivo"]];
+   for(const [re,b] of patterns){const m=ua.match(re);if(m){brand=b;model=m[1]||"";break;}}
+   if(brand==="Device"&&/Samsung/i.test(ua))brand="Samsung";
+   if(brand==="Device"&&/Xiaomi/i.test(ua))brand="Xiaomi";
+   if(brand==="Device")brand="Android phone";
+ }else if(ios){os="iOS";brand=/iPad/i.test(ua)||(/Macintosh/i.test(ua)&&navigator.maxTouchPoints>1)?"Apple iPad":"Apple iPhone";model="Model not exposed by iOS browser";}
+ else {os=platform||"Unknown OS";brand="Browser device";}
+ const exact=model&&model!=="Model not exposed by iOS browser";
+ const deviceName=exact?`${brand} ${model}`:brand;
+ return {brand,model,os,deviceName,exact};
+}
+const samsungModels={
+ "SM-G998B":"Galaxy S21 Ultra 5G","SM-G998U":"Galaxy S21 Ultra 5G","SM-G998U1":"Galaxy S21 Ultra 5G","SM-G991B":"Galaxy S21 5G","SM-G996B":"Galaxy S21+ 5G",
+ "SM-S908B":"Galaxy S22 Ultra","SM-S908U":"Galaxy S22 Ultra","SM-S918B":"Galaxy S23 Ultra","SM-S918U":"Galaxy S23 Ultra",
+ "SM-S928B":"Galaxy S24 Ultra","SM-S928U":"Galaxy S24 Ultra","SM-S938B":"Galaxy S25 Ultra","SM-S938U":"Galaxy S25 Ultra",
+ "SM-A536B":"Galaxy A53 5G","SM-A546B":"Galaxy A54 5G","SM-A556B":"Galaxy A55 5G","SM-A556E":"Galaxy A55 5G",
+ "SM-A156B":"Galaxy A15","SM-A256B":"Galaxy A25 5G","SM-A266B":"Galaxy A26 5G","SM-A346B":"Galaxy A34 5G",
+ "SM-F946B":"Galaxy Z Fold5","SM-F956B":"Galaxy Z Fold6","SM-F766B":"Galaxy Z Flip7"
+};
+const device=detectDevice();
+if(device.brand==="Samsung"&&device.model){device.friendly=samsungModels[device.model.toUpperCase()]||"Samsung model "+device.model;}
+const outW=Math.max(1,Math.round(sw*dpr)),outH=Math.max(1,Math.round(sh*dpr));
+async function enrichDeviceProfile(){
+ try{
+  if(navigator.userAgentData?.getHighEntropyValues){
+   const hints=await navigator.userAgentData.getHighEntropyValues(["model","platformVersion"]);
+   const hintedModel=(hints.model||"").trim();
+   if(hintedModel){
+    device.model=hintedModel;
+    if(/samsung/i.test(device.brand)){
+     device.friendly=samsungModels[hintedModel.toUpperCase()]||`Samsung ${hintedModel}`;
+    } else {
+     device.friendly=`${device.brand} ${hintedModel}`;
+    }
+    $("#deviceName").textContent=device.friendly;
+    $("#deviceDetail").textContent=`${device.os} · Model supplied by browser device hints`;
+    $("#miniDevice").textContent=device.friendly;
+   }
+  }
+ }catch(_){/* Browser denied high-entropy device hints; keep conservative fallback. */}
+}
+enrichDeviceProfile();
+$("#deviceName").textContent=device.friendly?`${device.friendly} (${device.model})`:device.deviceName;$("#deviceDetail").textContent=`${device.os} · ${device.exact?"Model identifier available":"Exact model may be hidden by browser privacy settings"}`;$("#miniDevice").textContent=device.friendly||device.deviceName;$("#screenSize").textContent=`${sw} × ${sh} CSS px`;$("#exportSize").textContent=`${outW} × ${outH} px`;$("#pixelRatio").textContent=`${dpr.toFixed(1)}× density`;
+function imageUrl(w,ww=1000,hh=1500){return `https://images.unsplash.com/${w.photo}?auto=format&fit=crop&crop=entropy&w=${ww}&h=${hh}&q=92`;}
+function renderCats(){$("#categories").innerHTML=collections.map(([label])=>`<button class="cat ${category===label?"active":""}" data-cat="${label}">${label}</button>`).join("");document.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{category=b.dataset.cat;renderCats();render();});}
+function render(){let q=$("#search").value.toLowerCase(),arr=wallpapers.filter(w=>(category==="All"||w.cat===category)&&(w.title+" "+w.cat+" "+w.desc).toLowerCase().includes(q));if($("#sort").value==="az")arr.sort((a,b)=>a.title.localeCompare(b.title));$("#grid").innerHTML=arr.length?arr.map(w=>`<article class="wall" data-id="${w.id}"><img loading="lazy" src="${imageUrl(w,760,1050)}" alt="${w.title}"><div class="overlay"><div><div class="wall-title">${w.title}</div><div class="wall-sub">${w.cat}</div></div><button class="view" data-view="${w.id}">Preview ↗</button></div></article>`).join(""):`<div class="empty">No wallpapers found. Try another category or search.</div>`;document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>open(+b.dataset.view));document.querySelectorAll(".wall").forEach(c=>c.onclick=e=>{if(!e.target.closest("button"))open(+c.dataset.id)});}
+function open(id){chosen=wallpapers.find(w=>w.id===id);$("#bigTitle").textContent=chosen.title;$("#bigDesc").textContent=chosen.desc;$("#bigImage").src=imageUrl(chosen,2200,3400);$("#bigDimensions").textContent=`Fitted export ${outW} × ${outH} px`;$("#modal").classList.add("open");document.body.style.overflow="hidden";}
+function close(){ $("#modal").classList.remove("open");document.body.style.overflow="";}$("#close").onclick=close;$("#modal").onclick=e=>{if(e.target.id==="modal")close();};document.addEventListener("keydown",e=>{if(e.key==="Escape")close();});
+function save(blob,name){let u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),30000);}
+async function fitted(){if(!chosen)return;let b=$("#downloadFit");b.disabled=true;b.textContent="Preparing image…";try{let im=new Image();im.crossOrigin="anonymous";im.src=imageUrl(chosen,Math.max(2600,outW),Math.max(4000,outH));await im.decode();let c=document.createElement("canvas");c.width=outW;c.height=outH;let x=c.getContext("2d"),scale=Math.max(outW/im.width,outH/im.height),cw=outW/scale,ch=outH/scale;x.drawImage(im,(im.width-cw)/2,(im.height-ch)/2,cw,ch,0,0,outW,outH);let blob=await new Promise(r=>c.toBlob(r,"image/jpeg",.96));if(!blob)throw Error();save(blob,`laupixels-${chosen.title.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-${outW}x${outH}.jpg`);b.textContent="Downloaded ✓";}catch(e){alert("The fitted export failed. Try downloading the large original.");}finally{b.disabled=false;setTimeout(()=>b.textContent="Download fitted wallpaper",2000);}}
+async function original(){if(!chosen)return;let b=$("#downloadSource");b.disabled=true;b.textContent="Preparing…";try{let r=await fetch(imageUrl(chosen,5000,7000));if(!r.ok)throw Error();save(await r.blob(),`laupixels-${chosen.title.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-large.jpg`);}catch(e){window.open(imageUrl(chosen,5000,7000),"_blank","noopener");}finally{b.disabled=false;b.textContent="Download large original";}}
+$("#downloadFit").onclick=fitted;$("#downloadSource").onclick=original;$("#search").oninput=render;$("#sort").onchange=render;renderCats();render();
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installPrompt=e;$("#installBtn").classList.add("show");});
+$("#installBtn").onclick=async()=>{
+ if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$("#installBtn").classList.remove("show");return;}
+ const isiOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+ alert(isiOS?"To install LAUPIXELS: tap Share in Safari, then choose 'Add to Home Screen'.":"To install LAUPIXELS: open your browser menu and choose 'Install app' or 'Add to Home screen'.");
+};
+if("serviceWorker"in navigator&&location.protocol!=="file:"){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}
+</script></body></html>

@@ -1,0 +1,20 @@
+{
+  "id": "./",
+  "name": "LAUPIXELS \u2014 Phone Wallpapers",
+  "short_name": "LAUPIXELS",
+  "description": "High-quality wallpapers fitted to your phone screen.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#090b10",
+  "theme_color": "#090b10",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
