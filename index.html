@@ -171,7 +171,7 @@ function renderCats(){$("#categories").innerHTML=collections.map(([label])=>`<bu
   if(!response.ok)throw new Error("Public catalogue request failed ("+response.status+").");
   const result=await response.json();
   if(!Array.isArray(result.data))throw new Error("The public catalogue response was invalid.");
-  if(!result.data.length)return;
+  // A successful empty response intentionally replaces the demo data.
   const live=result.data.map(item=>({
    id:String(item.id),title:item.title,cat:item.category,desc:item.description,
    imageUrl:item.imageUrl,previewUrl:item.previewUrl||item.imageUrl,
