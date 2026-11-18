@@ -20,7 +20,7 @@ try {
 
   await prisma.admin.upsert({
     where: { email },
-    update: { passwordHash, isActive: true },
+    update: {},
     create: { email, passwordHash }
   });
   console.log("Admin account seeded. Store the password in a password manager.");
