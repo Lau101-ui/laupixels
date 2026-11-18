@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { createHmac } from "node:crypto";
 
 export const UPLOAD_URL_TTL_SECONDS = 300;
 const REQUIRED_ENV = ["IMAGEKIT_PRIVATE_KEY", "IMAGEKIT_PUBLIC_KEY", "IMAGEKIT_URL_ENDPOINT"];
@@ -18,7 +18,6 @@ export function createImageKitStorage(env = process.env) {
   if (configured.length === 0) return null;
   if (configured.length !== REQUIRED_ENV.length) throw new Error("ImageKit configuration is incomplete. Configure IMAGEKIT_PRIVATE_KEY, IMAGEKIT_PUBLIC_KEY and IMAGEKIT_URL_ENDPOINT or leave them all empty.");
   const host = endpointHost(env.IMAGEKIT_URL_ENDPOINT);
-  const endpoint = env.IMAGEKIT_URL_ENDPOINT.replace(/\/+$/, "");
   const authorization = "Basic " + Buffer.from(env.IMAGEKIT_PRIVATE_KEY + ":").toString("base64");
 
   async function api(path, options = {}) {
