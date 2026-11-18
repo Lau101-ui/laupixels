@@ -10,15 +10,20 @@ LAUPIXELS is a standalone, mobile-first wallpaper platform. This repository is i
 ├── manifest.webmanifest          # Install metadata
 ├── sw.js                         # App-shell + bounded image cache
 ├── icon.svg                      # App icon
-├── .github/workflows/pages.yml   # Static frontend deployment
+├── .github/workflows/
+│   ├── ci.yml                     # Backend validation and container build
+│   └── pages.yml                 # Static frontend deployment
 ├── docker-compose.yml            # Local PostgreSQL + API stack
+├── .env.example                  # Local PostgreSQL environment template
 ├── server/
 │   ├── src/app.js                # Fastify API, auth, validation, admin routes
 │   ├── src/server.js             # API process and graceful shutdown
+│   ├── test/app.test.js          # API smoke tests
+│   ├── package.json              # API dependencies and scripts
 │   ├── prisma/schema.prisma      # PostgreSQL data model
 │   ├── prisma/migrations/        # Versioned initial migration
 │   ├── prisma/seed.js            # First administrator bootstrap
-│   └── .env.example              # Environment template
+│   └── .env.example              # API environment template
 ├── SECURITY.md                   # Security posture and production gates
 └── README.md
 ```
@@ -33,6 +38,7 @@ LAUPIXELS is a standalone, mobile-first wallpaper platform. This repository is i
 - Transactional audit records for wallpaper administration.
 - Liveness and database-readiness endpoints.
 - Local Docker Compose setup with database health checks and API bound to loopback on the host.
+- GitHub Actions checks for JavaScript syntax, API smoke tests, Prisma schema validation and API container builds.
 
 ## Run the frontend
 
@@ -56,6 +62,19 @@ Requirements: Docker Compose and Node.js 22+.
 6. API endpoints: `GET /health`, `GET /ready`, `GET /v1/categories`, `GET /v1/wallpapers`, `POST /v1/admin/login`, and authenticated admin wallpaper create/update/delete routes.
 
 The API binds to `127.0.0.1:8787` from the host in Compose. Do not expose it directly to the public internet without TLS termination, a reverse proxy configured for the actual hosting environment, secrets management, monitoring, backups and a security review.
+
+## Validate the backend
+
+From the `server/` directory:
+
+```bash
+npm install
+npm run check
+npm test
+npm run db:validate
+```
+
+The API smoke tests cover liveness, CORS rejection, login request validation and protection of admin write routes. They do not replace integration tests against a running PostgreSQL database. The same checks and a Docker image build run in GitHub Actions for pull requests and pushes to `main`.
 
 ## Important current boundaries
 

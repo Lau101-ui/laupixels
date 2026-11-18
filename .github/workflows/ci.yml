@@ -1,0 +1,48 @@
+name: Validate LAUPIXELS
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "server/**"
+      - ".github/workflows/ci.yml"
+      - "docker-compose.yml"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API checks and tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Check JavaScript syntax
+        run: npm run check
+      - name: Run API smoke tests
+        run: npm test
+      - name: Validate Prisma schema
+        run: npm run db:validate
+        env:
+          DATABASE_URL: postgresql://laupixels:ci-only@127.0.0.1:5432/laupixels?schema=public
+
+  container:
+    name: Build API container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build --tag laupixels-api:ci ./server
