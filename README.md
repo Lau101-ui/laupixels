@@ -18,7 +18,7 @@ LAUPIXELS is a standalone, mobile-first wallpaper platform. This repository is i
 ├── server/
 │   ├── src/app.js                # Fastify API, auth, upload and admin routes
 │   ├── src/server.js             # API process and graceful shutdown
-│   ├── src/storage/r2.js         # S3-compatible Cloudflare R2 adapter
+│   ├── src/storage/imagekit.js   # ImageKit upload and media API adapter
 │   ├── src/storage/image.js      # Image validation and WebP normalization
 │   ├── test/                     # API and image/storage tests
 │   ├── package.json              # API dependencies and scripts
@@ -38,108 +38,32 @@ LAUPIXELS is a standalone, mobile-first wallpaper platform. This repository is i
 - PostgreSQL via Prisma, public wallpaper/category endpoints, cursor pagination, admin create/update/delete routes.
 - Argon2id administrator password hashing and short-lived JWTs. Admin active status is checked on each protected request.
 - Transactional audit records for wallpaper and media-upload administration.
-- Cloudflare R2 integration through the S3-compatible API and short-lived, content-type-bound upload URLs.
-- Separate private upload and public delivery buckets; raw uploads are never written to the public bucket.
+- ImageKit integration using short-lived, server-generated upload signatures; private API keys remain on the backend.
+- Original uploads are checked against the administrator's pending upload intent, decoded and re-encoded before sanitized WebP files are saved to ImageKit.
 - Server-side image decoding and WebP re-encoding, generated previews, pixel/byte limits and EXIF metadata removal.
 - Liveness and database-readiness endpoints.
 - Local Docker Compose setup with database health checks and API bound to loopback on the host.
 - GitHub Actions checks for JavaScript syntax, API/image tests, Prisma schema validation and API container builds.
 
-## Cloudflare R2 storage
+## ImageKit storage
 
-R2 is the selected storage provider because its standard tier currently includes a monthly free allowance of 10 GB-month storage, 1 million Class A operations and 10 million Class B operations, with no internet egress charge. Usage above the allowance is billed; this is a free allowance, not unlimited free storage. Check Cloudflare's live [R2 pricing](https://developers.cloudflare.com/r2/pricing/) before launch.
+ImageKit is the selected media provider. Its Free plan is subject to storage and bandwidth quotas; free availability and limits can change, so verify the current plan in your ImageKit dashboard. LAUPIXELS does not require a payment card to be configured in the application, but the provider account's own billing terms and quota behaviour still apply.
 
-### 1. Create the buckets and credentials
+### Configure the API
 
-1. Create or sign in to a Cloudflare account.
-2. Open **Storage & databases → R2** and create two Standard buckets:
-   - `laupixels-private-uploads` — private staging bucket. Do not enable public access.
-   - `laupixels-public-media` — delivery bucket. Enable public read access for published wallpaper images.
-3. Create an R2 API token with **Object Read & Write**, restricted to these two buckets only. Do not create an account-wide token if bucket-scoped access is available.
-4. Copy the Account ID, Access Key ID and Secret Access Key. The secret is shown once.
-5. Connect a custom domain to the public delivery bucket for a real launch. The `r2.dev` public development URL is acceptable for a temporary demo, but is not the production delivery domain.
-6. Add the first CORS policy to the private upload bucket, replacing the origin with the exact deployed frontend origin.
+In ImageKit, open **Developer options** and locate the Public Key, Private Key and URL Endpoint. Set these backend environment variables:
 
-```json
-[
-  {
-    "AllowedOrigins": ["https://YOUR-FRONTEND-DOMAIN"],
-    "AllowedMethods": ["PUT"],
-    "AllowedHeaders": ["Content-Type"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3600
-  }
-]
-```
+- `IMAGEKIT_PUBLIC_KEY`
+- `IMAGEKIT_PRIVATE_KEY` — secret; backend only.
+- `IMAGEKIT_URL_ENDPOINT` — HTTPS URL endpoint for your media library.
 
-7. Add this second CORS policy to the public delivery bucket. The frontend uses cross-origin image fetches for fitted wallpaper exports.
+Keep the private key in the API host's secret/environment settings. Never place it in `index.html`, frontend JavaScript, GitHub Pages variables exposed to the browser, or a public repository. Leave all three values blank for local development without uploads; upload endpoints then return `storage_not_configured`.
 
-```json
-[
-  {
-    "AllowedOrigins": ["https://YOUR-FRONTEND-DOMAIN"],
-    "AllowedMethods": ["GET", "HEAD"],
-    "AllowedHeaders": ["*"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3600
-  }
-]
-```
+### Upload flow
 
-The private bucket receives raw files through short-lived signed URLs. The API decodes and re-encodes accepted images, then writes only sanitized WebP files to the public bucket. Configure an R2 lifecycle rule on the private bucket to delete objects under the `incoming/` prefix after one day as a safety net for uploads that are started but never completed.
+All upload endpoints require an administrator bearer token. The API issues a five-minute, one-time upload signature. The browser uses ImageKit's upload API with the returned token, signature, expiry and public key, then submits the resulting ImageKit file ID to the completion endpoint. The API verifies the file is in the expected incoming folder, checks its size, fetches it only from the configured ImageKit host, decodes and re-encodes JPEG/PNG/WebP to WebP, removes embedded metadata and stores a full image plus a preview. The original incoming file is deleted after successful processing.
 
-### 2. Configure the API
-
-Copy `server/.env.example` to `server/.env` for local development, then fill in:
-
-- `R2_ACCOUNT_ID`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_UPLOAD_BUCKET` — private staging bucket name.
-- `R2_PUBLIC_BUCKET` — public delivery bucket name. It must be different from the upload bucket.
-- `R2_PUBLIC_BASE_URL` — HTTPS custom domain or temporary `r2.dev` URL for the public delivery bucket.
-
-Keep all credentials on the API host. Never put them in `index.html`, frontend JavaScript, GitHub Pages variables exposed to the browser, or a public repository. In production, set them in the backend host's secret/environment settings. Local development works with all R2 values blank, but upload endpoints return `storage_not_configured`.
-
-### 3. Upload flow
-
-All upload endpoints require an administrator bearer token.
-
-1. Request an upload URL:
-
-```http
-POST /v1/admin/uploads
-Authorization: Bearer ADMIN_ACCESS_TOKEN
-Content-Type: application/json
-
-{
-  "contentType": "image/jpeg",
-  "sizeBytes": 2480123
-}
-```
-
-2. Send the file bytes directly to the returned `uploadUrl` using HTTP `PUT` and the exact returned `Content-Type` header. The signed URL expires after five minutes.
-3. Complete processing:
-
-```http
-POST /v1/admin/uploads/UPLOAD_ID/complete
-Authorization: Bearer ADMIN_ACCESS_TOKEN
-```
-
-4. Use the returned `uploadId` values when creating the wallpaper:
-
-```json
-{
-  "slug": "midnight-drive",
-  "title": "Midnight Drive",
-  "description": "A cinematic night drive.",
-  "category": "Cars",
-  "imageUploadId": "IMAGE_UPLOAD_ID",
-  "isPublished": false
-}
-```
-
-The API checks the stored byte count and declared content type, decodes the image, rejects unsupported/animated or oversized images, strips embedded metadata by re-encoding, and stores WebP originals and previews. Accepted source formats are JPEG, PNG and WebP; uploads are limited to 15 MiB and 40 million pixels. The upload record is tied to the administrator and can be attached to a wallpaper once. Supplying `imageUploadId` automatically uses the generated preview; a separate `previewUploadId` is optional.
+Accepted source formats are JPEG, PNG and WebP; uploads are limited to 15 MiB and 40 million pixels. A completed upload is tied to the administrator and can be attached to a wallpaper once.
 
 ## Run the frontend
 
@@ -175,7 +99,7 @@ npm test
 npm run db:validate
 ```
 
-Tests cover API smoke behaviour, R2 configuration validation and image normalization. They do not replace integration tests against a running PostgreSQL database or a real R2 bucket. The same checks and a Docker image build run in GitHub Actions for pull requests and pushes to `main`.
+Tests cover API smoke behaviour, ImageKit configuration validation and image normalization. They do not replace integration tests against a running PostgreSQL database or a live ImageKit account. The same checks and a Docker image build run in GitHub Actions for pull requests and pushes to `main`.
 
 ## Important current boundaries
 
