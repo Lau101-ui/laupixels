@@ -257,7 +257,7 @@ export async function buildApp({ storage: storageOverride } = {}) {
     if (upload.status === "READY") return reply.code(409).send({ error: "upload_already_completed" });
     if (upload.status !== "PENDING") return reply.code(409).send({ error: "upload_not_pending" });
     if (upload.expiresAt.getTime() <= Date.now()) {
-      await storage.deleteObject(upload.uploadKey).catch(() => {});
+      await storage.deleteUploadObject(upload.uploadKey).catch(() => {});
       await prisma.mediaUpload.update({ where: { id: upload.id }, data: { status: "EXPIRED" } });
       return reply.code(410).send({ error: "upload_expired" });
     }
@@ -276,7 +276,7 @@ export async function buildApp({ storage: storageOverride } = {}) {
         Number(head.ContentLength) !== upload.expectedSizeBytes ||
         head.ContentType !== upload.expectedContentType
       ) {
-        await storage.deleteObject(upload.uploadKey).catch(() => {});
+        await storage.deleteUploadObject(upload.uploadKey).catch(() => {});
         await prisma.mediaUpload.update({
           where: { id: upload.id },
           data: { status: "REJECTED", processingStartedAt: null }
@@ -286,7 +286,7 @@ export async function buildApp({ storage: storageOverride } = {}) {
 
       const input = await storage.getObjectBuffer(upload.uploadKey);
       if (input.length !== upload.expectedSizeBytes || input.length > MAX_IMAGE_BYTES) {
-        await storage.deleteObject(upload.uploadKey).catch(() => {});
+        await storage.deleteUploadObject(upload.uploadKey).catch(() => {});
         await prisma.mediaUpload.update({
           where: { id: upload.id },
           data: { status: "REJECTED", processingStartedAt: null }
@@ -334,7 +334,7 @@ export async function buildApp({ storage: storageOverride } = {}) {
         });
       });
 
-      await storage.deleteObject(upload.uploadKey).catch(() => {});
+      await storage.deleteUploadObject(upload.uploadKey).catch(() => {});
       return reply.code(200).send({
         uploadId: upload.id,
         imageUrl,
@@ -345,9 +345,9 @@ export async function buildApp({ storage: storageOverride } = {}) {
         height: normalized.height
       });
     } catch (error) {
-      await Promise.allSettled(finalKeys.map(key => storage.deleteObject(key)));
+      await Promise.allSettled(finalKeys.map(key => storage.deletePublicObject(key)));
       if (error instanceof InvalidImageError) {
-        await storage.deleteObject(upload.uploadKey).catch(() => {});
+        await storage.deleteUploadObject(upload.uploadKey).catch(() => {});
         await prisma.mediaUpload.update({
           where: { id: upload.id },
           data: { status: "REJECTED", processingStartedAt: null }

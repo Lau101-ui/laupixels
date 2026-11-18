@@ -9,6 +9,7 @@
 - Short-lived JWTs with issuer/audience checks; every privileged request re-checks the administrator's active status in PostgreSQL.
 - Privileged wallpaper and media-upload operations write audit records in database transactions.
 - R2 credentials remain server-side. Browser uploads use five-minute presigned PUT URLs for a single random object key, with the content type signed.
+- A private staging bucket receives raw files; only decoded and re-encoded WebP originals/previews are written to the separate public delivery bucket.
 - Upload intents are tied to the requesting administrator, rate-limited, size-limited and checked against the stored object size and content type before processing.
 - Sharp decodes accepted JPEG/PNG/WebP files, rejects invalid/animated/oversized images, limits input pixels, applies orientation, re-encodes to WebP and removes embedded EXIF/GPS metadata.
 - Original and preview WebP objects use unpredictable keys; wallpaper records can reference only completed uploads belonging to the administrator.
@@ -32,7 +33,7 @@
 1. Deploy API behind maintained HTTPS ingress; configure trusted proxy settings narrowly for that platform and enable HSTS only after TLS is verified.
 2. Provision managed PostgreSQL with least-privilege credentials, encryption, automated backups and tested restores.
 3. Use a secrets manager; rotate JWT signing material. Add refresh/session revocation, MFA and audited administrator lifecycle controls.
-4. Keep the R2 API token scoped to the LAUPIXELS bucket. Use a custom domain for public wallpaper delivery, not the temporary `r2.dev` endpoint. Configure bucket CORS for the exact frontend origin and expire abandoned objects under `incoming/`.
+4. Keep the R2 API token scoped to the two LAUPIXELS buckets. Keep the staging bucket private, use a custom domain for public wallpaper delivery, and configure CORS only on the staging bucket for the exact frontend origin. Expire abandoned objects under `incoming/`.
 5. Add automated tests for auth, authorization, CORS, rate limits, pagination, malformed payloads, asset host checks, upload races and storage failure paths.
 6. Pin dependencies with a reviewed lockfile; run dependency and container vulnerability scanning continuously.
 7. Add malware scanning and a copyright/moderation process before accepting uploads from anyone other than trusted administrators.

@@ -13,7 +13,8 @@ const REQUIRED_ENV = [
   "R2_ACCOUNT_ID",
   "R2_ACCESS_KEY_ID",
   "R2_SECRET_ACCESS_KEY",
-  "R2_BUCKET",
+  "R2_UPLOAD_BUCKET",
+  "R2_PUBLIC_BUCKET",
   "R2_PUBLIC_BASE_URL"
 ];
 
@@ -24,6 +25,9 @@ export function createR2Storage(env = process.env) {
   if (configured.length === 0) return null;
   if (configured.length !== REQUIRED_ENV.length) {
     throw new Error("R2 storage configuration is incomplete. Configure all R2_* variables or leave them all empty.");
+  }
+  if (env.R2_UPLOAD_BUCKET === env.R2_PUBLIC_BUCKET) {
+    throw new Error("R2_UPLOAD_BUCKET and R2_PUBLIC_BUCKET must be separate buckets.");
   }
 
   let publicBase;
@@ -54,7 +58,8 @@ export function createR2Storage(env = process.env) {
     },
     maxAttempts: 2
   });
-  const bucket = env.R2_BUCKET;
+  const uploadBucket = env.R2_UPLOAD_BUCKET;
+  const publicBucket = env.R2_PUBLIC_BUCKET;
 
   return {
     publicBaseUrl,
@@ -65,7 +70,7 @@ export function createR2Storage(env = process.env) {
 
     async createUploadUrl(key, contentType) {
       const command = new PutObjectCommand({
-        Bucket: bucket,
+        Bucket: uploadBucket,
         Key: key,
         ContentType: contentType
       });
@@ -76,18 +81,18 @@ export function createR2Storage(env = process.env) {
     },
 
     async headObject(key) {
-      return client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+      return client.send(new HeadObjectCommand({ Bucket: uploadBucket, Key: key }));
     },
 
     async getObjectBuffer(key) {
-      const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      const response = await client.send(new GetObjectCommand({ Bucket: uploadBucket, Key: key }));
       if (!response.Body) throw new Error("Storage returned an empty object body.");
       return Buffer.from(await response.Body.transformToByteArray());
     },
 
     async putObject(key, body, contentType = "image/webp") {
       return client.send(new PutObjectCommand({
-        Bucket: bucket,
+        Bucket: publicBucket,
         Key: key,
         Body: body,
         ContentType: contentType,
@@ -95,8 +100,12 @@ export function createR2Storage(env = process.env) {
       }));
     },
 
-    async deleteObject(key) {
-      return client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    async deleteUploadObject(key) {
+      return client.send(new DeleteObjectCommand({ Bucket: uploadBucket, Key: key }));
+    },
+
+    async deletePublicObject(key) {
+      return client.send(new DeleteObjectCommand({ Bucket: publicBucket, Key: key }));
     }
   };
 }
