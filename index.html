@@ -161,7 +161,11 @@ enrichDeviceProfile();
 $("#deviceName").textContent=device.friendly?`${device.friendly} (${device.model})`:device.deviceName;$("#deviceDetail").textContent=`${device.os} · ${device.exact?"Model identifier available":"Exact model may be hidden by browser privacy settings"}`;$("#miniDevice").textContent=device.friendly||device.deviceName;$("#screenSize").textContent=`${sw} × ${sh} CSS px`;$("#exportSize").textContent=`${outW} × ${outH} px`;$("#pixelRatio").textContent=`${dpr.toFixed(1)}× density`;
 function imageUrl(w,ww=1000,hh=1500){if(w.imageUrl)return w.imageUrl;return `https://images.unsplash.com/${w.photo}?auto=format&fit=crop&crop=entropy&w=${ww}&h=${hh}&q=92`;}
 function escapeHtml(value){return String(value??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;");}
-function renderCats(){$("#categories").innerHTML=collections.map(([label])=>`<button class="cat ${category===label?"active":""}" data-cat="${escapeHtml(label)}">${escapeHtml(label)}</button>`).join("");document.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{category=b.dataset.cat;async function loadPublicCatalogue(){
+function renderCats(){
+ $("#categories").innerHTML=collections.map(([label])=>`<button class="cat ${category===label?"active":""}" data-cat="${escapeHtml(label)}">${escapeHtml(label)}</button>`).join("");
+ document.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{category=b.dataset.cat;renderCats();render();});
+}
+async function loadPublicCatalogue(){
  const apiBase=window.LAUPIXELS_CONFIG?.API_BASE_URL?.trim();
  if(!apiBase)return;
  try{
@@ -171,7 +175,6 @@ function renderCats(){$("#categories").innerHTML=collections.map(([label])=>`<bu
   if(!response.ok)throw new Error("Public catalogue request failed ("+response.status+").");
   const result=await response.json();
   if(!Array.isArray(result.data))throw new Error("The public catalogue response was invalid.");
-  // A successful empty response intentionally replaces the demo data.
   const live=result.data.map(item=>({
    id:String(item.id),title:item.title,cat:item.category,desc:item.description,
    imageUrl:item.imageUrl,previewUrl:item.previewUrl||item.imageUrl,
@@ -192,14 +195,13 @@ function renderCats(){$("#categories").innerHTML=collections.map(([label])=>`<bu
   $("#grid").replaceChildren(empty);
  }
 }
-renderCats();render();loadPublicCatalogue();});}
 function render(){let q=$("#search").value.toLowerCase(),arr=wallpapers.filter(w=>(category==="All"||w.cat===category)&&(w.title+" "+w.cat+" "+w.desc).toLowerCase().includes(q));if($("#sort").value==="az")arr.sort((a,b)=>a.title.localeCompare(b.title));$("#grid").innerHTML=arr.length?arr.map(w=>`<article class="wall" data-id="${escapeHtml(w.id)}"><img loading="lazy" src="${escapeHtml(w.previewUrl||imageUrl(w,760,1050))}" alt="${escapeHtml(w.title)}"><div class="overlay"><div><div class="wall-title">${escapeHtml(w.title)}</div><div class="wall-sub">${escapeHtml(w.cat)}</div></div><button class="view" data-view="${w.id}">Preview ↗</button></div></article>`).join(""):`<div class="empty">No wallpapers found. Try another category or search.</div>`;document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>open(b.dataset.view));document.querySelectorAll(".wall").forEach(c=>c.onclick=e=>{if(!e.target.closest("button"))open(c.dataset.id)});}
 function open(id){chosen=wallpapers.find(w=>String(w.id)===String(id));$("#bigTitle").textContent=chosen.title;$("#bigDesc").textContent=chosen.desc;$("#bigImage").src=imageUrl(chosen,2200,3400);$("#bigDimensions").textContent=`Fitted export ${outW} × ${outH} px`;$("#modal").classList.add("open");document.body.style.overflow="hidden";}
 function close(){ $("#modal").classList.remove("open");document.body.style.overflow="";}$("#close").onclick=close;$("#modal").onclick=e=>{if(e.target.id==="modal")close();};document.addEventListener("keydown",e=>{if(e.key==="Escape")close();});
 function save(blob,name){let u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),30000);}
 async function fitted(){if(!chosen)return;let b=$("#downloadFit");b.disabled=true;b.textContent="Preparing image…";try{let im=new Image();im.crossOrigin="anonymous";im.src=imageUrl(chosen,Math.max(2600,outW),Math.max(4000,outH));await im.decode();let c=document.createElement("canvas");c.width=outW;c.height=outH;let x=c.getContext("2d"),scale=Math.max(outW/im.width,outH/im.height),cw=outW/scale,ch=outH/scale;x.drawImage(im,(im.width-cw)/2,(im.height-ch)/2,cw,ch,0,0,outW,outH);let blob=await new Promise(r=>c.toBlob(r,"image/jpeg",.96));if(!blob)throw Error();save(blob,`laupixels-${chosen.title.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-${outW}x${outH}.jpg`);b.textContent="Downloaded ✓";}catch(e){alert("The fitted export failed. Try downloading the large original.");}finally{b.disabled=false;setTimeout(()=>b.textContent="Download fitted wallpaper",2000);}}
 async function original(){if(!chosen)return;let b=$("#downloadSource");b.disabled=true;b.textContent="Preparing…";try{let r=await fetch(imageUrl(chosen,5000,7000));if(!r.ok)throw Error();save(await r.blob(),`laupixels-${chosen.title.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-large.jpg`);}catch(e){window.open(imageUrl(chosen,5000,7000),"_blank","noopener");}finally{b.disabled=false;b.textContent="Download large original";}}
-$("#downloadFit").onclick=fitted;$("#downloadSource").onclick=original;$("#search").oninput=render;$("#sort").onchange=render;renderCats();render();
+$("#downloadFit").onclick=fitted;$("#downloadSource").onclick=original;$("#search").oninput=render;$("#sort").onchange=render;renderCats();render();loadPublicCatalogue();
 function isAppInstalled(){return window.matchMedia("(display-mode: standalone)").matches||window.matchMedia("(display-mode: fullscreen)").matches||navigator.standalone===true;}
 syncInstallButton();
 function syncInstallButton(){if(isAppInstalled()){$("#installBtn").classList.remove("show");installPrompt=null;}}
