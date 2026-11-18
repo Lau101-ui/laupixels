@@ -58,7 +58,7 @@ R2 is the selected storage provider because its standard tier currently includes
 3. Create an R2 API token with **Object Read & Write**, restricted to these two buckets only. Do not create an account-wide token if bucket-scoped access is available.
 4. Copy the Account ID, Access Key ID and Secret Access Key. The secret is shown once.
 5. Connect a custom domain to the public delivery bucket for a real launch. The `r2.dev` public development URL is acceptable for a temporary demo, but is not the production delivery domain.
-6. Add the CORS policy below to the private upload bucket, replacing the origin with the exact deployed frontend origin.
+6. Add the first CORS policy to the private upload bucket, replacing the origin with the exact deployed frontend origin.
 
 ```json
 [
@@ -66,6 +66,20 @@ R2 is the selected storage provider because its standard tier currently includes
     "AllowedOrigins": ["https://YOUR-FRONTEND-DOMAIN"],
     "AllowedMethods": ["PUT"],
     "AllowedHeaders": ["Content-Type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+7. Add this second CORS policy to the public delivery bucket. The frontend uses cross-origin image fetches for fitted wallpaper exports.
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://YOUR-FRONTEND-DOMAIN"],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["*"],
     "ExposeHeaders": ["ETag"],
     "MaxAgeSeconds": 3600
   }
