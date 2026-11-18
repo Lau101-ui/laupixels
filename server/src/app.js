@@ -346,7 +346,7 @@ export async function buildApp({ storage: storageOverride } = {}) {
     } catch (error) {
       await Promise.allSettled(finalKeys.map(key => storage.deletePublicObject(key)));
       if (error instanceof InvalidImageError) {
-        await storage.deleteUploadObject(upload.uploadKey).catch(() => {});
+        await storage.deleteUploadObject(body.data.fileId).catch(() => {});
         await prisma.mediaUpload.update({
           where: { id: upload.id },
           data: { status: "REJECTED", processingStartedAt: null }
