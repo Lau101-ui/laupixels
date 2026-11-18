@@ -84,6 +84,7 @@ footer{letter-spacing:.03em}
 <footer><span>LAUPIXELS · Personalise your phone</span><span>Internet required for first-time image loading · PWA offline shell</span></footer>
 </div>
 <div class="auth-backdrop" id="authBackdrop" aria-hidden="true"><section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle"><button class="auth-close" id="authClose" type="button" aria-label="Close">×</button><div class="eyebrow">LAUPIXELS / MEMBER ACCESS</div><h2 id="authTitle">Your visual archive.</h2><p id="authIntro">Create an account to keep your LAUPIXELS identity.</p><div class="auth-actions"><button type="button" id="authSignIn">SIGN IN</button><button type="button" id="authSignUp" class="active">CREATE ACCOUNT</button></div><form id="authForm"><div id="authNameWrap"><label for="authName">NAME</label><input id="authName" name="name" autocomplete="name" maxlength="80" required></div><label for="authEmail">EMAIL</label><input id="authEmail" name="email" type="email" autocomplete="email" maxlength="254" required><label for="authPassword">PASSWORD</label><input id="authPassword" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required><button class="auth-submit" id="authSubmit" type="submit">CREATE ACCOUNT</button></form><p class="auth-status" id="authStatus" role="status" aria-live="polite"></p><button class="outline" id="authSignOut" type="button" hidden>Sign out</button></section></div><div class="modal-bg" id="modal" role="dialog" aria-modal="true" aria-label="Wallpaper preview"><div class="modal"><div class="visual"><img id="bigImage" alt="Selected wallpaper"></div><div class="info"><button class="close" id="close" aria-label="Close">×</button><h2 id="bigTitle">Wallpaper</h2><p id="bigDesc"></p><div class="chips"><span class="chip" id="bigDimensions">—</span><span class="chip">JPEG · 96% quality</span></div><button class="primary" id="downloadFit">Download fitted wallpaper</button><button class="outline" id="downloadSource">Download large original</button><div class="hint">Fitted export crops to your screen's aspect ratio. Original download preserves the source image. Exact phone model detection depends on what the browser exposes.</div></div></div></div>
+<script src="./config.js"></script>
 <script>
 const collections=[
 ["All","All"],["Anime","Anime"],["Cars","Cars"],["Graphic art","Graphic art"],["Expressive art","Expressive art"],["Musicians","Musicians"],["Nature","Nature"],["Architecture","Architecture"],["Gaming","Gaming"],["Abstract","Abstract"],["Space","Space"],["Minimal","Minimal"],["Streetwear","Streetwear"],["Photography","Photography"],["Dark aesthetic","Dark aesthetic"]
@@ -158,15 +159,49 @@ async function enrichDeviceProfile(){
 }
 enrichDeviceProfile();
 $("#deviceName").textContent=device.friendly?`${device.friendly} (${device.model})`:device.deviceName;$("#deviceDetail").textContent=`${device.os} · ${device.exact?"Model identifier available":"Exact model may be hidden by browser privacy settings"}`;$("#miniDevice").textContent=device.friendly||device.deviceName;$("#screenSize").textContent=`${sw} × ${sh} CSS px`;$("#exportSize").textContent=`${outW} × ${outH} px`;$("#pixelRatio").textContent=`${dpr.toFixed(1)}× density`;
-function imageUrl(w,ww=1000,hh=1500){return `https://images.unsplash.com/${w.photo}?auto=format&fit=crop&crop=entropy&w=${ww}&h=${hh}&q=92`;}
-function renderCats(){$("#categories").innerHTML=collections.map(([label])=>`<button class="cat ${category===label?"active":""}" data-cat="${label}">${label}</button>`).join("");document.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{category=b.dataset.cat;renderCats();render();});}
-function render(){let q=$("#search").value.toLowerCase(),arr=wallpapers.filter(w=>(category==="All"||w.cat===category)&&(w.title+" "+w.cat+" "+w.desc).toLowerCase().includes(q));if($("#sort").value==="az")arr.sort((a,b)=>a.title.localeCompare(b.title));$("#grid").innerHTML=arr.length?arr.map(w=>`<article class="wall" data-id="${w.id}"><img loading="lazy" src="${imageUrl(w,760,1050)}" alt="${w.title}"><div class="overlay"><div><div class="wall-title">${w.title}</div><div class="wall-sub">${w.cat}</div></div><button class="view" data-view="${w.id}">Preview ↗</button></div></article>`).join(""):`<div class="empty">No wallpapers found. Try another category or search.</div>`;document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>open(+b.dataset.view));document.querySelectorAll(".wall").forEach(c=>c.onclick=e=>{if(!e.target.closest("button"))open(+c.dataset.id)});}
-function open(id){chosen=wallpapers.find(w=>w.id===id);$("#bigTitle").textContent=chosen.title;$("#bigDesc").textContent=chosen.desc;$("#bigImage").src=imageUrl(chosen,2200,3400);$("#bigDimensions").textContent=`Fitted export ${outW} × ${outH} px`;$("#modal").classList.add("open");document.body.style.overflow="hidden";}
+function imageUrl(w,ww=1000,hh=1500){if(w.imageUrl)return w.imageUrl;return `https://images.unsplash.com/${w.photo}?auto=format&fit=crop&crop=entropy&w=${ww}&h=${hh}&q=92`;}
+function escapeHtml(value){return String(value??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;");}
+function renderCats(){
+ $("#categories").innerHTML=collections.map(([label])=>`<button class="cat ${category===label?"active":""}" data-cat="${escapeHtml(label)}">${escapeHtml(label)}</button>`).join("");
+ document.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{category=b.dataset.cat;renderCats();render();});
+}
+async function loadPublicCatalogue(){
+ const apiBase=window.LAUPIXELS_CONFIG?.API_BASE_URL?.trim();
+ if(!apiBase)return;
+ try{
+  const base=new URL(apiBase);
+  if(base.protocol!=="https:"&&base.hostname!=="localhost")throw new Error("The public API URL must use HTTPS.");
+  const response=await fetch(base.origin+"/v1/wallpapers?limit=50",{headers:{Accept:"application/json"},cache:"no-store"});
+  if(!response.ok)throw new Error("Public catalogue request failed ("+response.status+").");
+  const result=await response.json();
+  if(!Array.isArray(result.data))throw new Error("The public catalogue response was invalid.");
+  const live=result.data.map(item=>({
+   id:String(item.id),title:item.title,cat:item.category,desc:item.description,
+   imageUrl:item.imageUrl,previewUrl:item.previewUrl||item.imageUrl,
+   width:item.width,height:item.height
+  }));
+  wallpapers.splice(0,wallpapers.length,...live);
+  const cats=Array.from(new Set(live.map(item=>item.cat))).sort((a,b)=>a.localeCompare(b));
+  collections.splice(0,collections.length,["All","All"],...cats.map(name=>[name,name]));
+  category="All";renderCats();render();
+ }catch(error){
+  console.warn("LAUPIXELS API catalogue unavailable.",error);
+  wallpapers.splice(0,wallpapers.length);
+  collections.splice(0,collections.length,["All","All"]);
+  category="All";renderCats();
+  const empty=document.createElement("div");
+  empty.className="empty";
+  empty.textContent="Live catalogue is temporarily unavailable. Please try again later.";
+  $("#grid").replaceChildren(empty);
+ }
+}
+function render(){let q=$("#search").value.toLowerCase(),arr=wallpapers.filter(w=>(category==="All"||w.cat===category)&&(w.title+" "+w.cat+" "+w.desc).toLowerCase().includes(q));if($("#sort").value==="az")arr.sort((a,b)=>a.title.localeCompare(b.title));$("#grid").innerHTML=arr.length?arr.map(w=>`<article class="wall" data-id="${escapeHtml(w.id)}"><img loading="lazy" src="${escapeHtml(w.previewUrl||imageUrl(w,760,1050))}" alt="${escapeHtml(w.title)}"><div class="overlay"><div><div class="wall-title">${escapeHtml(w.title)}</div><div class="wall-sub">${escapeHtml(w.cat)}</div></div><button class="view" data-view="${w.id}">Preview ↗</button></div></article>`).join(""):`<div class="empty">No wallpapers found. Try another category or search.</div>`;document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>open(b.dataset.view));document.querySelectorAll(".wall").forEach(c=>c.onclick=e=>{if(!e.target.closest("button"))open(c.dataset.id)});}
+function open(id){chosen=wallpapers.find(w=>String(w.id)===String(id));$("#bigTitle").textContent=chosen.title;$("#bigDesc").textContent=chosen.desc;$("#bigImage").src=imageUrl(chosen,2200,3400);$("#bigDimensions").textContent=`Fitted export ${outW} × ${outH} px`;$("#modal").classList.add("open");document.body.style.overflow="hidden";}
 function close(){ $("#modal").classList.remove("open");document.body.style.overflow="";}$("#close").onclick=close;$("#modal").onclick=e=>{if(e.target.id==="modal")close();};document.addEventListener("keydown",e=>{if(e.key==="Escape")close();});
 function save(blob,name){let u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),30000);}
 async function fitted(){if(!chosen)return;let b=$("#downloadFit");b.disabled=true;b.textContent="Preparing image…";try{let im=new Image();im.crossOrigin="anonymous";im.src=imageUrl(chosen,Math.max(2600,outW),Math.max(4000,outH));await im.decode();let c=document.createElement("canvas");c.width=outW;c.height=outH;let x=c.getContext("2d"),scale=Math.max(outW/im.width,outH/im.height),cw=outW/scale,ch=outH/scale;x.drawImage(im,(im.width-cw)/2,(im.height-ch)/2,cw,ch,0,0,outW,outH);let blob=await new Promise(r=>c.toBlob(r,"image/jpeg",.96));if(!blob)throw Error();save(blob,`laupixels-${chosen.title.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-${outW}x${outH}.jpg`);b.textContent="Downloaded ✓";}catch(e){alert("The fitted export failed. Try downloading the large original.");}finally{b.disabled=false;setTimeout(()=>b.textContent="Download fitted wallpaper",2000);}}
 async function original(){if(!chosen)return;let b=$("#downloadSource");b.disabled=true;b.textContent="Preparing…";try{let r=await fetch(imageUrl(chosen,5000,7000));if(!r.ok)throw Error();save(await r.blob(),`laupixels-${chosen.title.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-large.jpg`);}catch(e){window.open(imageUrl(chosen,5000,7000),"_blank","noopener");}finally{b.disabled=false;b.textContent="Download large original";}}
-$("#downloadFit").onclick=fitted;$("#downloadSource").onclick=original;$("#search").oninput=render;$("#sort").onchange=render;renderCats();render();
+$("#downloadFit").onclick=fitted;$("#downloadSource").onclick=original;$("#search").oninput=render;$("#sort").onchange=render;renderCats();render();loadPublicCatalogue();
 function isAppInstalled(){return window.matchMedia("(display-mode: standalone)").matches||window.matchMedia("(display-mode: fullscreen)").matches||navigator.standalone===true;}
 syncInstallButton();
 function syncInstallButton(){if(isAppInstalled()){$("#installBtn").classList.remove("show");installPrompt=null;}}
