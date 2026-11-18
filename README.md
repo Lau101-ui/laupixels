@@ -113,7 +113,7 @@ A real-user email registration, sign-in, sign-out and session recognition have b
 
 ## Important current boundaries
 
-The public frontend catalogue is still a local seed collection and is not yet connected to the API. The separate `/admin.html` workspace supports administrator login, ImageKit uploads, record listing and publish/unpublish/delete actions when the API is deployed and configured. There is no MFA, session revocation, payment system, automated copyright moderation, malware scanning or production deployment. Deleting a wallpaper does not yet remove its ImageKit objects. Read `SECURITY.md` before deployment.
+The public gallery reads `config.js` for the API origin. Leave `API_BASE_URL` blank to use the bundled demo catalogue; after deploying the backend, set it to the API's HTTPS origin to load published wallpapers from PostgreSQL. The gallery derives its categories from the live results. The separate `/admin.html` workspace supports administrator login, ImageKit uploads, record listing and publish/unpublish/delete actions when the API is deployed and configured. There is no MFA, session revocation, payment system, automated copyright moderation, malware scanning or production deployment. Deleting a wallpaper does not yet remove its ImageKit objects. Read `SECURITY.md` before deployment.
 
 ## Deployment
 
