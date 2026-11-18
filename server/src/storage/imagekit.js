@@ -37,7 +37,7 @@ export function createImageKitStorage(env = process.env) {
 
   return {
     async createUploadUrl(fileName) {
-      const token = randomUUID();
+      const token = fileName;
       const expire = Math.floor(Date.now() / 1000) + UPLOAD_URL_TTL_SECONDS;
       const signature = createHmac("sha1", env.IMAGEKIT_PRIVATE_KEY).update(token + expire).digest("hex");
       return { token, expire, signature, publicKey: env.IMAGEKIT_PUBLIC_KEY };
@@ -76,7 +76,14 @@ export function createImageKitStorage(env = process.env) {
       form.set("folder", folder);
       form.set("useUniqueFileName", "false");
       form.set("overwriteFile", "false");
-      const result = await api("/files/upload", { method: "POST", body: form });
+      const response = await fetch("https://upload.imagekit.io/api/v1/files/upload", {
+        method: "POST",
+        headers: { Authorization: authorization },
+        body: form,
+        signal: AbortSignal.timeout(30000)
+      });
+      if (!response.ok) throw new Error("ImageKit media upload failed with status " + response.status);
+      const result = await response.json();
       if (!result.fileId || !result.url) throw new Error("ImageKit upload response was incomplete.");
       return result;
     },
