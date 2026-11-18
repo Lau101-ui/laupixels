@@ -181,7 +181,16 @@ function renderCats(){$("#categories").innerHTML=collections.map(([label])=>`<bu
   const cats=Array.from(new Set(live.map(item=>item.cat))).sort((a,b)=>a.localeCompare(b));
   collections.splice(0,collections.length,["All","All"],...cats.map(name=>[name,name]));
   category="All";renderCats();render();
- }catch(error){console.warn("LAUPIXELS API catalogue unavailable; keeping demo catalogue.",error);}
+ }catch(error){
+  console.warn("LAUPIXELS API catalogue unavailable.",error);
+  wallpapers.splice(0,wallpapers.length);
+  collections.splice(0,collections.length,["All","All"]);
+  category="All";renderCats();
+  const empty=document.createElement("div");
+  empty.className="empty";
+  empty.textContent="Live catalogue is temporarily unavailable. Please try again later.";
+  $("#grid").replaceChildren(empty);
+ }
 }
 renderCats();render();loadPublicCatalogue();});}
 function render(){let q=$("#search").value.toLowerCase(),arr=wallpapers.filter(w=>(category==="All"||w.cat===category)&&(w.title+" "+w.cat+" "+w.desc).toLowerCase().includes(q));if($("#sort").value==="az")arr.sort((a,b)=>a.title.localeCompare(b.title));$("#grid").innerHTML=arr.length?arr.map(w=>`<article class="wall" data-id="${escapeHtml(w.id)}"><img loading="lazy" src="${escapeHtml(w.previewUrl||imageUrl(w,760,1050))}" alt="${escapeHtml(w.title)}"><div class="overlay"><div><div class="wall-title">${escapeHtml(w.title)}</div><div class="wall-sub">${escapeHtml(w.cat)}</div></div><button class="view" data-view="${w.id}">Preview ↗</button></div></article>`).join(""):`<div class="empty">No wallpapers found. Try another category or search.</div>`;document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>open(b.dataset.view));document.querySelectorAll(".wall").forEach(c=>c.onclick=e=>{if(!e.target.closest("button"))open(c.dataset.id)});}
