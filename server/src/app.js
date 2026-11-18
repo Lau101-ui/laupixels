@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -6,6 +7,8 @@ import jwt from "@fastify/jwt";
 import argon2 from "argon2";
 import { z } from "zod";
 import { PrismaClient } from "@prisma/client";
+import { createR2Storage, UPLOAD_URL_TTL_SECONDS } from "./storage/r2.js";
+import { InvalidImageError, MAX_IMAGE_BYTES, normalizeImage } from "./storage/image.js";
 
 const prisma = new PrismaClient();
 const WallpaperInput = z.object({
@@ -13,11 +16,38 @@ const WallpaperInput = z.object({
   title: z.string().trim().min(2).max(120),
   description: z.string().trim().min(2).max(500),
   category: z.string().trim().min(2).max(60),
-  imageUrl: z.string().url().max(2048),
+  imageUrl: z.string().url().max(2048).optional(),
+  imageUploadId: z.string().min(1).max(100).optional(),
   previewUrl: z.string().url().max(2048).optional(),
+  previewUploadId: z.string().min(1).max(100).optional(),
   width: z.number().int().positive().max(30000).optional(),
   height: z.number().int().positive().max(30000).optional(),
   isPublished: z.boolean().default(false)
+}).strict().superRefine((data, ctx) => {
+  if (Boolean(data.imageUrl) === Boolean(data.imageUploadId)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Provide exactly one of imageUrl or imageUploadId.", path: ["imageUrl"] });
+  }
+  if (data.previewUrl && data.previewUploadId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Provide either previewUrl or previewUploadId, not both.", path: ["previewUrl"] });
+  }
+  if (data.imageUploadId && data.imageUploadId === data.previewUploadId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Use separate uploads for the original and preview.", path: ["previewUploadId"] });
+  }
+});
+const WallpaperPatchInput = z.object({
+  slug: z.string().trim().min(2).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  title: z.string().trim().min(2).max(120),
+  description: z.string().trim().min(2).max(500),
+  category: z.string().trim().min(2).max(60),
+  imageUrl: z.string().url().max(2048),
+  previewUrl: z.string().url().max(2048),
+  width: z.number().int().positive().max(30000),
+  height: z.number().int().positive().max(30000),
+  isPublished: z.boolean()
+}).partial().strict();
+const UploadInput = z.object({
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  sizeBytes: z.number().int().positive().max(MAX_IMAGE_BYTES)
 }).strict();
 
 function allowedAssetUrl(value, hosts) {
@@ -29,7 +59,8 @@ function allowedAssetUrl(value, hosts) {
   }
 }
 
-export async function buildApp() {
+export async function buildApp({ storage: storageOverride } = {}) {
+  const storage = storageOverride === undefined ? createR2Storage() : storageOverride;
   const app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL || "info",
@@ -159,44 +190,281 @@ export async function buildApp() {
     return { data, nextCursor: hasMore ? data.at(-1).id : null };
   });
 
+  app.post("/v1/admin/uploads", {
+    preHandler: app.authenticateAdmin,
+    config: { rateLimit: { max: 10, timeWindow: "1 hour" } }
+  }, async (request, reply) => {
+    const parsed = UploadInput.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_upload_request" });
+    if (!storage) return reply.code(503).send({ error: "storage_not_configured" });
+
+    const uploadKey = "incoming/" + randomUUID();
+    const expiresAt = new Date(Date.now() + UPLOAD_URL_TTL_SECONDS * 1000);
+    const upload = await prisma.$transaction(async tx => {
+      const created = await tx.mediaUpload.create({
+        data: {
+          adminId: request.user.sub,
+          uploadKey,
+          expectedContentType: parsed.data.contentType,
+          expectedSizeBytes: parsed.data.sizeBytes,
+          expiresAt
+        }
+      });
+      await tx.adminAuditLog.create({
+        data: {
+          adminId: request.user.sub,
+          action: "media.upload.request",
+          entity: "media_upload",
+          entityId: created.id,
+          metadata: { contentType: parsed.data.contentType, sizeBytes: parsed.data.sizeBytes }
+        }
+      });
+      return created;
+    });
+
+    try {
+      const uploadUrl = await storage.createUploadUrl(upload.uploadKey, upload.expectedContentType);
+      return reply.code(201).send({
+        uploadId: upload.id,
+        method: "PUT",
+        uploadUrl,
+        headers: { "Content-Type": upload.expectedContentType },
+        maxBytes: MAX_IMAGE_BYTES,
+        expectedBytes: upload.expectedSizeBytes,
+        expiresAt: upload.expiresAt.toISOString()
+      });
+    } catch (error) {
+      await prisma.mediaUpload.update({
+        where: { id: upload.id },
+        data: { status: "REJECTED" }
+      });
+      throw error;
+    }
+  });
+
+  app.post("/v1/admin/uploads/:id/complete", {
+    preHandler: app.authenticateAdmin,
+    config: { rateLimit: { max: 20, timeWindow: "1 hour" } }
+  }, async (request, reply) => {
+    const parsedId = z.string().min(1).max(100).safeParse(request.params.id);
+    if (!parsedId.success) return reply.code(400).send({ error: "invalid_upload_id" });
+    if (!storage) return reply.code(503).send({ error: "storage_not_configured" });
+
+    const upload = await prisma.mediaUpload.findFirst({
+      where: { id: parsedId.data, adminId: request.user.sub }
+    });
+    if (!upload) return reply.code(404).send({ error: "upload_not_found" });
+    if (upload.status === "READY") return reply.code(409).send({ error: "upload_already_completed" });
+    if (upload.status !== "PENDING") return reply.code(409).send({ error: "upload_not_pending" });
+    if (upload.expiresAt.getTime() <= Date.now()) {
+      await storage.deleteObject(upload.uploadKey).catch(() => {});
+      await prisma.mediaUpload.update({ where: { id: upload.id }, data: { status: "EXPIRED" } });
+      return reply.code(410).send({ error: "upload_expired" });
+    }
+
+    // Claim the upload atomically so two completion requests cannot process it twice.
+    const claim = await prisma.mediaUpload.updateMany({
+      where: { id: upload.id, adminId: request.user.sub, status: "PENDING" },
+      data: { status: "PROCESSING", processingStartedAt: new Date() }
+    });
+    if (claim.count !== 1) return reply.code(409).send({ error: "upload_already_processing" });
+
+    const finalKeys = [];
+    try {
+      const head = await storage.headObject(upload.uploadKey);
+      if (
+        Number(head.ContentLength) !== upload.expectedSizeBytes ||
+        head.ContentType !== upload.expectedContentType
+      ) {
+        await storage.deleteObject(upload.uploadKey).catch(() => {});
+        await prisma.mediaUpload.update({
+          where: { id: upload.id },
+          data: { status: "REJECTED", processingStartedAt: null }
+        });
+        return reply.code(422).send({ error: "uploaded_file_mismatch" });
+      }
+
+      const input = await storage.getObjectBuffer(upload.uploadKey);
+      if (input.length !== upload.expectedSizeBytes || input.length > MAX_IMAGE_BYTES) {
+        await storage.deleteObject(upload.uploadKey).catch(() => {});
+        await prisma.mediaUpload.update({
+          where: { id: upload.id },
+          data: { status: "REJECTED", processingStartedAt: null }
+        });
+        return reply.code(422).send({ error: "uploaded_file_mismatch" });
+      }
+
+      const normalized = await normalizeImage(input, upload.expectedContentType);
+      const suffix = randomUUID();
+      const objectKey = "wallpapers/" + suffix + ".webp";
+      const previewKey = "previews/" + suffix + ".webp";
+      finalKeys.push(objectKey, previewKey);
+
+      await storage.putObject(objectKey, normalized.imageBuffer);
+      await storage.putObject(previewKey, normalized.previewBuffer);
+
+      const imageUrl = storage.publicUrl(objectKey);
+      const previewUrl = storage.publicUrl(previewKey);
+      const outputSizeBytes = normalized.imageBuffer.length;
+
+      await prisma.$transaction(async tx => {
+        await tx.mediaUpload.update({
+          where: { id: upload.id },
+          data: {
+            status: "READY",
+            objectKey,
+            previewKey,
+            imageUrl,
+            previewUrl,
+            outputSizeBytes,
+            width: normalized.width,
+            height: normalized.height,
+            completedAt: new Date(),
+            processingStartedAt: null
+          }
+        });
+        await tx.adminAuditLog.create({
+          data: {
+            adminId: request.user.sub,
+            action: "media.upload.complete",
+            entity: "media_upload",
+            entityId: upload.id,
+            metadata: { width: normalized.width, height: normalized.height, outputSizeBytes }
+          }
+        });
+      });
+
+      await storage.deleteObject(upload.uploadKey).catch(() => {});
+      return reply.code(200).send({
+        uploadId: upload.id,
+        imageUrl,
+        previewUrl,
+        contentType: "image/webp",
+        sizeBytes: outputSizeBytes,
+        width: normalized.width,
+        height: normalized.height
+      });
+    } catch (error) {
+      await Promise.allSettled(finalKeys.map(key => storage.deleteObject(key)));
+      if (error instanceof InvalidImageError) {
+        await storage.deleteObject(upload.uploadKey).catch(() => {});
+        await prisma.mediaUpload.update({
+          where: { id: upload.id },
+          data: { status: "REJECTED", processingStartedAt: null }
+        }).catch(() => {});
+        return reply.code(422).send({ error: "invalid_image" });
+      }
+
+      await prisma.mediaUpload.updateMany({
+        where: { id: upload.id, status: "PROCESSING" },
+        data: { status: "PENDING", processingStartedAt: null }
+      }).catch(() => {});
+      throw error;
+    }
+  });
+
   app.post("/v1/admin/wallpapers", { preHandler: app.authenticateAdmin }, async (request, reply) => {
     const parsed = WallpaperInput.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input", details: parsed.error.flatten() });
-    for (const key of ["imageUrl", "previewUrl"]) {
-      const value = parsed.data[key];
-      if (value && !allowedAssetUrl(value, assetHosts)) return reply.code(400).send({ error: "asset_host_not_allowed", field: key });
+
+    if (parsed.data.imageUrl && !allowedAssetUrl(parsed.data.imageUrl, assetHosts)) {
+      return reply.code(400).send({ error: "asset_host_not_allowed", field: "imageUrl" });
     }
+    if (parsed.data.previewUrl && !allowedAssetUrl(parsed.data.previewUrl, assetHosts)) {
+      return reply.code(400).send({ error: "asset_host_not_allowed", field: "previewUrl" });
+    }
+
     try {
-      const created = await prisma.$transaction(async tx => {
-        const wallpaper = await tx.wallpaper.create({ data: parsed.data });
+      const result = await prisma.$transaction(async tx => {
+        let imageUpload = null;
+        let previewUpload = null;
+
+        if (parsed.data.imageUploadId) {
+          imageUpload = await tx.mediaUpload.findFirst({
+            where: {
+              id: parsed.data.imageUploadId,
+              adminId: request.user.sub,
+              status: "READY",
+              imageFor: null,
+              previewFor: null
+            }
+          });
+          if (!imageUpload?.imageUrl) return { error: "image_upload_not_ready" };
+        }
+        if (parsed.data.previewUploadId) {
+          previewUpload = await tx.mediaUpload.findFirst({
+            where: {
+              id: parsed.data.previewUploadId,
+              adminId: request.user.sub,
+              status: "READY",
+              imageFor: null,
+              previewFor: null
+            }
+          });
+          if (!previewUpload?.previewUrl) return { error: "preview_upload_not_ready" };
+        }
+
+        const data = { ...parsed.data };
+        delete data.imageUploadId;
+        delete data.previewUploadId;
+        data.imageUrl = imageUpload ? imageUpload.imageUrl : data.imageUrl;
+        data.previewUrl = previewUpload
+          ? previewUpload.previewUrl
+          : (imageUpload ? imageUpload.previewUrl : data.previewUrl);
+        if (imageUpload) {
+          data.imageUpload = { connect: { id: imageUpload.id } };
+          data.width = data.width ?? imageUpload.width;
+          data.height = data.height ?? imageUpload.height;
+        }
+        if (previewUpload) data.previewUpload = { connect: { id: previewUpload.id } };
+
+        const wallpaper = await tx.wallpaper.create({ data });
         await tx.adminAuditLog.create({ data: {
-          adminId: request.user.sub, action: "wallpaper.create", entity: "wallpaper", entityId: wallpaper.id,
-          metadata: { slug: wallpaper.slug, isPublished: wallpaper.isPublished }
+          adminId: request.user.sub,
+          action: "wallpaper.create",
+          entity: "wallpaper",
+          entityId: wallpaper.id,
+          metadata: {
+            slug: wallpaper.slug,
+            isPublished: wallpaper.isPublished,
+            imageUploadId: imageUpload?.id || null,
+            previewUploadId: previewUpload?.id || null
+          }
         } });
-        return wallpaper;
+        return { wallpaper };
       });
-      return reply.code(201).send(created);
+
+      if (result.error) return reply.code(409).send({ error: result.error });
+      return reply.code(201).send(result.wallpaper);
     } catch (err) {
-      if (err?.code === "P2002") return reply.code(409).send({ error: "slug_already_exists" });
+      if (err?.code === "P2002") return reply.code(409).send({ error: "slug_or_upload_already_used" });
       throw err;
     }
   });
 
   app.patch("/v1/admin/wallpapers/:id", { preHandler: app.authenticateAdmin }, async (request, reply) => {
     const id = z.string().min(1).max(100).safeParse(request.params.id);
-    const parsed = WallpaperInput.partial().strict().safeParse(request.body);
+    const parsed = WallpaperPatchInput.safeParse(request.body);
     if (!id.success || !parsed.success || Object.keys(parsed.data).length === 0) {
       return reply.code(400).send({ error: "invalid_input" });
     }
     for (const key of ["imageUrl", "previewUrl"]) {
       const value = parsed.data[key];
-      if (value && !allowedAssetUrl(value, assetHosts)) return reply.code(400).send({ error: "asset_host_not_allowed", field: key });
+      if (value && !allowedAssetUrl(value, assetHosts)) {
+        return reply.code(400).send({ error: "asset_host_not_allowed", field: key });
+      }
     }
+    const data = { ...parsed.data };
+    if (Object.hasOwn(data, "imageUrl")) data.imageUpload = { disconnect: true };
+    if (Object.hasOwn(data, "previewUrl")) data.previewUpload = { disconnect: true };
     try {
       return await prisma.$transaction(async tx => {
-        const updated = await tx.wallpaper.update({ where: { id: id.data }, data: parsed.data });
+        const updated = await tx.wallpaper.update({ where: { id: id.data }, data });
         await tx.adminAuditLog.create({ data: {
-          adminId: request.user.sub, action: "wallpaper.update", entity: "wallpaper", entityId: updated.id,
+          adminId: request.user.sub,
+          action: "wallpaper.update",
+          entity: "wallpaper",
+          entityId: updated.id,
           metadata: { changedFields: Object.keys(parsed.data) }
         } });
         return updated;
@@ -215,7 +483,10 @@ export async function buildApp() {
       await prisma.$transaction(async tx => {
         const removed = await tx.wallpaper.delete({ where: { id: id.data } });
         await tx.adminAuditLog.create({ data: {
-          adminId: request.user.sub, action: "wallpaper.delete", entity: "wallpaper", entityId: removed.id,
+          adminId: request.user.sub,
+          action: "wallpaper.delete",
+          entity: "wallpaper",
+          entityId: removed.id,
           metadata: { slug: removed.slug }
         } });
       });

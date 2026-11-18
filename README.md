@@ -16,12 +16,14 @@ LAUPIXELS is a standalone, mobile-first wallpaper platform. This repository is i
 ├── docker-compose.yml            # Local PostgreSQL + API stack
 ├── .env.example                  # Local PostgreSQL environment template
 ├── server/
-│   ├── src/app.js                # Fastify API, auth, validation, admin routes
+│   ├── src/app.js                # Fastify API, auth, upload and admin routes
 │   ├── src/server.js             # API process and graceful shutdown
-│   ├── test/app.test.js          # API smoke tests
+│   ├── src/storage/r2.js         # S3-compatible Cloudflare R2 adapter
+│   ├── src/storage/image.js      # Image validation and WebP normalization
+│   ├── test/                     # API and image/storage tests
 │   ├── package.json              # API dependencies and scripts
 │   ├── prisma/schema.prisma      # PostgreSQL data model
-│   ├── prisma/migrations/        # Versioned initial migration
+│   ├── prisma/migrations/        # Versioned database migrations
 │   ├── prisma/seed.js            # First administrator bootstrap
 │   └── .env.example              # API environment template
 ├── SECURITY.md                   # Security posture and production gates
@@ -32,13 +34,95 @@ LAUPIXELS is a standalone, mobile-first wallpaper platform. This repository is i
 
 - PWA frontend with install affordance, category browsing, search, preview and device-sized export.
 - Best-effort device model detection. Browser-supplied model strings are hints only; iOS and some Android browsers intentionally withhold exact model data.
-- Fastify API with Helmet, explicit CORS allowlist, request-size cap, global and login rate limits, strict request validation and generic error responses.
-- PostgreSQL via Prisma, explicit public-field selection, category endpoint, cursor pagination, admin create/update/delete routes.
+- Fastify API with Helmet, explicit CORS allowlist, request-size cap, global and route-specific rate limits, strict request validation and generic error responses.
+- PostgreSQL via Prisma, public wallpaper/category endpoints, cursor pagination, admin create/update/delete routes.
 - Argon2id administrator password hashing and short-lived JWTs. Admin active status is checked on each protected request.
-- Transactional audit records for wallpaper administration.
+- Transactional audit records for wallpaper and media-upload administration.
+- Cloudflare R2 integration through the S3-compatible API and short-lived, content-type-bound upload URLs.
+- Server-side image decoding and WebP re-encoding, generated previews, pixel/byte limits and EXIF metadata removal.
 - Liveness and database-readiness endpoints.
 - Local Docker Compose setup with database health checks and API bound to loopback on the host.
-- GitHub Actions checks for JavaScript syntax, API smoke tests, Prisma schema validation and API container builds.
+- GitHub Actions checks for JavaScript syntax, API/image tests, Prisma schema validation and API container builds.
+
+## Cloudflare R2 storage
+
+R2 is the selected storage provider because its standard tier currently includes a monthly free allowance of 10 GB-month storage, 1 million Class A operations and 10 million Class B operations, with no internet egress charge. Usage above the allowance is billed; this is a free allowance, not unlimited free storage. Check Cloudflare's live [R2 pricing](https://developers.cloudflare.com/r2/pricing/) before launch.
+
+### 1. Create the bucket and credentials
+
+1. Create or sign in to a Cloudflare account.
+2. Open **Storage & databases → R2** and create a Standard bucket, for example `laupixels-media`.
+3. Create an R2 API token with **Object Read & Write**, restricted to this bucket only. Do not create an account-wide token if a bucket-scoped token is available.
+4. Copy the Account ID, Access Key ID and Secret Access Key. The secret is shown once.
+5. Configure public read access for wallpaper delivery. Use a custom domain for a real launch. The `r2.dev` public development URL is acceptable for a temporary demo, but is not the production delivery domain.
+6. Add the bucket CORS policy below, replacing the origin with the exact deployed frontend origin.
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://YOUR-FRONTEND-DOMAIN"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["Content-Type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+The bucket's public domain is for reading published wallpaper files. Upload permission is not exposed to the browser: only the API receives the R2 credentials and issues short-lived, single-object upload URLs. Configure an R2 lifecycle rule to delete objects under the `incoming/` prefix after one day as a safety net for uploads that are started but never completed.
+
+### 2. Configure the API
+
+Copy `server/.env.example` to `server/.env` for local development, then fill in:
+
+- `R2_ACCOUNT_ID`
+- `R2_ACCESS_KEY_ID`
+- `R2_SECRET_ACCESS_KEY`
+- `R2_BUCKET`
+- `R2_PUBLIC_BASE_URL` — your HTTPS custom domain or temporary `r2.dev` public URL.
+
+Keep all credentials on the API host. Never put them in `index.html`, frontend JavaScript, GitHub Pages variables exposed to the browser, or a public repository. In production, set them in the backend host's secret/environment settings. Local development works with all R2 values blank, but upload endpoints return `storage_not_configured`.
+
+### 3. Upload flow
+
+All upload endpoints require an administrator bearer token.
+
+1. Request an upload URL:
+
+```http
+POST /v1/admin/uploads
+Authorization: Bearer ADMIN_ACCESS_TOKEN
+Content-Type: application/json
+
+{
+  "contentType": "image/jpeg",
+  "sizeBytes": 2480123
+}
+```
+
+2. Send the file bytes directly to the returned `uploadUrl` using HTTP `PUT` and the exact returned `Content-Type` header. The signed URL expires after five minutes.
+3. Complete processing:
+
+```http
+POST /v1/admin/uploads/UPLOAD_ID/complete
+Authorization: Bearer ADMIN_ACCESS_TOKEN
+```
+
+4. Use the returned `uploadId` values when creating the wallpaper:
+
+```json
+{
+  "slug": "midnight-drive",
+  "title": "Midnight Drive",
+  "description": "A cinematic night drive.",
+  "category": "Cars",
+  "imageUploadId": "IMAGE_UPLOAD_ID",
+  "previewUploadId": "PREVIEW_UPLOAD_ID",
+  "isPublished": false
+}
+```
+
+The API checks the stored byte count and declared content type, decodes the image, rejects unsupported/animated or oversized images, strips embedded metadata by re-encoding, and stores WebP originals and previews. Accepted source formats are JPEG, PNG and WebP; uploads are limited to 15 MiB and 40 million pixels. The upload record is tied to the administrator and can be attached to a wallpaper once.
 
 ## Run the frontend
 
@@ -54,12 +138,12 @@ Open `http://localhost:8000`.
 
 Requirements: Docker Compose and Node.js 22+.
 
-1. Copy `.env.example` to root `.env` and set a unique `POSTGRES_PASSWORD`.
+1. Copy root `.env.example` to `.env` and set a unique `POSTGRES_PASSWORD`.
 2. Copy `server/.env.example` to `server/.env`.
 3. Replace `JWT_SECRET` with at least 32 random bytes and set a strong unique `ADMIN_INITIAL_PASSWORD` (14+ characters). Set `CORS_ORIGINS` to the exact frontend origin.
 4. Start PostgreSQL: `docker compose up -d db`.
 5. For the containerised API, run `docker compose run --rm api npx prisma migrate deploy` after the database is healthy, then `docker compose run --rm api node prisma/seed.js`, then `docker compose up -d api`. For a host-run API, in `server/` run `npm install`, `npx prisma generate`, `npm run db:migrate`, `npm run db:seed`, `npm run dev` (use a host-reachable database URL in `server/.env`).
-6. API endpoints: `GET /health`, `GET /ready`, `GET /v1/categories`, `GET /v1/wallpapers`, `POST /v1/admin/login`, and authenticated admin wallpaper create/update/delete routes.
+6. API endpoints: `GET /health`, `GET /ready`, `GET /v1/categories`, `GET /v1/wallpapers`, `POST /v1/admin/login`, admin upload endpoints and authenticated wallpaper create/update/delete routes.
 
 The API binds to `127.0.0.1:8787` from the host in Compose. Do not expose it directly to the public internet without TLS termination, a reverse proxy configured for the actual hosting environment, secrets management, monitoring, backups and a security review.
 
@@ -74,11 +158,11 @@ npm test
 npm run db:validate
 ```
 
-The API smoke tests cover liveness, CORS rejection, login request validation and protection of admin write routes. They do not replace integration tests against a running PostgreSQL database. The same checks and a Docker image build run in GitHub Actions for pull requests and pushes to `main`.
+Tests cover API smoke behaviour, R2 configuration validation and image normalization. They do not replace integration tests against a running PostgreSQL database or a real R2 bucket. The same checks and a Docker image build run in GitHub Actions for pull requests and pushes to `main`.
 
 ## Important current boundaries
 
-This is a development foundation, not a completed commercial backend. The frontend catalogue is still a local seed collection and is not yet connected to the API. There is no image-upload endpoint, object-storage integration, administrator UI, MFA, session revocation, payment system, moderation workflow or production deployment. Do not represent these as implemented. Read `SECURITY.md` before deployment.
+The frontend catalogue is still a local seed collection and is not yet connected to the API. There is no administrator dashboard or frontend upload interface, MFA, session revocation, payment system, automated copyright moderation, malware scanning or production deployment. Do not represent these as implemented. Read `SECURITY.md` before deployment.
 
 ## Deployment
 
