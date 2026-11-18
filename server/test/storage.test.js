@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createHmac } from "node:crypto";
 import { createImageKitStorage, UPLOAD_URL_TTL_SECONDS } from "../src/storage/imagekit.js";
 
 const config = {
@@ -26,4 +27,13 @@ test("upload authentication expires after five minutes", () => {
 
 test("ImageKit storage can be initialized with all required settings", () => {
   assert.ok(createImageKitStorage(config));
+});
+
+test("upload signature is generated server-side and bound to the upload token", async () => {
+  const storage = createImageKitStorage(config);
+  const auth = await storage.createUploadUrl("expected-file-name");
+  assert.equal(auth.token, "expected-file-name");
+  assert.equal(auth.publicKey, config.IMAGEKIT_PUBLIC_KEY);
+  assert.equal(auth.expire - Math.floor(Date.now() / 1000), UPLOAD_URL_TTL_SECONDS);
+  assert.equal(auth.signature, createHmac("sha1", config.IMAGEKIT_PRIVATE_KEY).update(auth.token + auth.expire).digest("hex"));
 });
