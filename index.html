@@ -167,7 +167,12 @@ function save(blob,name){let u=URL.createObjectURL(blob),a=document.createElemen
 async function fitted(){if(!chosen)return;let b=$("#downloadFit");b.disabled=true;b.textContent="Preparing image…";try{let im=new Image();im.crossOrigin="anonymous";im.src=imageUrl(chosen,Math.max(2600,outW),Math.max(4000,outH));await im.decode();let c=document.createElement("canvas");c.width=outW;c.height=outH;let x=c.getContext("2d"),scale=Math.max(outW/im.width,outH/im.height),cw=outW/scale,ch=outH/scale;x.drawImage(im,(im.width-cw)/2,(im.height-ch)/2,cw,ch,0,0,outW,outH);let blob=await new Promise(r=>c.toBlob(r,"image/jpeg",.96));if(!blob)throw Error();save(blob,`laupixels-${chosen.title.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-${outW}x${outH}.jpg`);b.textContent="Downloaded ✓";}catch(e){alert("The fitted export failed. Try downloading the large original.");}finally{b.disabled=false;setTimeout(()=>b.textContent="Download fitted wallpaper",2000);}}
 async function original(){if(!chosen)return;let b=$("#downloadSource");b.disabled=true;b.textContent="Preparing…";try{let r=await fetch(imageUrl(chosen,5000,7000));if(!r.ok)throw Error();save(await r.blob(),`laupixels-${chosen.title.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-large.jpg`);}catch(e){window.open(imageUrl(chosen,5000,7000),"_blank","noopener");}finally{b.disabled=false;b.textContent="Download large original";}}
 $("#downloadFit").onclick=fitted;$("#downloadSource").onclick=original;$("#search").oninput=render;$("#sort").onchange=render;renderCats();render();
-window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installPrompt=e;$("#installBtn").classList.add("show");});
+function isAppInstalled(){return window.matchMedia("(display-mode: standalone)").matches||window.matchMedia("(display-mode: fullscreen)").matches||navigator.standalone===true;}
+syncInstallButton();
+function syncInstallButton(){if(isAppInstalled()){$("#installBtn").classList.remove("show");installPrompt=null;}}
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installPrompt=e;if(!isAppInstalled())$("#installBtn").classList.add("show");});
+window.addEventListener("appinstalled",()=>{$("#installBtn").classList.remove("show");installPrompt=null;});
+document.addEventListener("visibilitychange",syncInstallButton);
 $("#installBtn").onclick=async()=>{
  if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$("#installBtn").classList.remove("show");return;}
  const isiOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
