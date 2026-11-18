@@ -46,6 +46,16 @@ test("admin login rejects a request with a missing password", async () => {
   assert.equal(response.statusCode, 400);
 });
 
+test("admin wallpaper listing rejects unauthenticated requests", async () => {
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/admin/wallpapers"
+  });
+
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.json().error, "unauthorized");
+});
+
 test("admin wallpaper creation rejects unauthenticated requests", async () => {
   const response = await app.inject({
     method: "POST",
