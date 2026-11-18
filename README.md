@@ -109,12 +109,12 @@ Email sign-up and sign-in are enabled on the Neon `production` branch. Email ver
 
 The account panel calls `signUp.email`, `signIn.email`, `getSession`, and `signOut`. Session persistence depends on the browser accepting the Managed Auth session cookies. Some browsers block cross-site cookies for a GitHub Pages origin; if session restoration fails, use a supported same-site custom-domain/proxy setup rather than weakening authentication.
 
-A live signup against Neon and a real-user session read still need to be performed in a browser. GitHub Actions currently validates the API backend and does not exercise browser-to-Neon authentication.
+A real-user email registration, sign-in, sign-out and session recognition have been manually confirmed in the browser. GitHub Actions does not exercise browser-to-Neon authentication.
 
 ## Important current boundaries
 
-The frontend catalogue is still a local seed collection and is not yet connected to the API. There is no administrator dashboard or frontend upload interface, MFA, session revocation, payment system, automated copyright moderation, malware scanning or production deployment. Do not represent these as implemented. Read `SECURITY.md` before deployment.
+The public frontend catalogue is still a local seed collection and is not yet connected to the API. The separate `/admin.html` workspace supports administrator login, ImageKit uploads, record listing and publish/unpublish/delete actions when the API is deployed and configured. There is no MFA, session revocation, payment system, automated copyright moderation, malware scanning or production deployment. Deleting a wallpaper does not yet remove its ImageKit objects. Read `SECURITY.md` before deployment.
 
 ## Deployment
 
-The GitHub Pages workflow deploys only the static frontend. GitHub Pages cannot host the Fastify/PostgreSQL backend. The API requires a separate Node-capable host and managed PostgreSQL/database service. Configure the frontend API base URL and exact CORS origin when those services are provisioned.
+The GitHub Pages workflow deploys the public gallery and `/admin.html`; GitHub Pages cannot host the Fastify/PostgreSQL backend. `render.yaml` provides an optional Render Free web-service blueprint for the API. The Render free service may spin down when idle, causing cold starts. It still requires a Neon PostgreSQL connection string, ImageKit credentials, an administrator email and a unique administrator password to be entered as environment secrets during setup. Use the direct (non-pooled) Neon connection string for Prisma migrations. Set the admin workspace API URL to the deployed Render service origin. The API CORS allowlist is preconfigured for `https://lau101-ui.github.io`.
