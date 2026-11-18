@@ -7,6 +7,7 @@ on:
       - "server/**"
       - "admin.js"
       - "admin.html"
+      - "config.js"
       - ".github/workflows/pages.yml"
       - ".github/workflows/ci.yml"
       - "docker-compose.yml"
