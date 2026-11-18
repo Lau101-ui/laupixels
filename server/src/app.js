@@ -362,6 +362,34 @@ export async function buildApp({ storage: storageOverride } = {}) {
     }
   });
 
+  app.get("/v1/admin/wallpapers", {
+    preHandler: app.authenticateAdmin,
+    schema: { querystring: { type: "object", additionalProperties: false, properties: {
+      cursor: { type: "string", maxLength: 100 },
+      limit: { type: "integer", minimum: 1, maximum: 50, default: 30 },
+      search: { type: "string", maxLength: 120 }
+    } } }
+  }, async request => {
+    const { cursor, limit = 30, search } = request.query;
+    const rows = await prisma.wallpaper.findMany({
+      where: search ? { OR: [
+        { title: { contains: search, mode: "insensitive" } },
+        { slug: { contains: search, mode: "insensitive" } }
+      ] } : {},
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+      take: limit + 1,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      select: {
+        id: true, slug: true, title: true, description: true, category: true,
+        imageUrl: true, previewUrl: true, width: true, height: true,
+        isPublished: true, createdAt: true, updatedAt: true
+      }
+    });
+    const hasMore = rows.length > limit;
+    const data = hasMore ? rows.slice(0, limit) : rows;
+    return { data, nextCursor: hasMore ? data.at(-1).id : null };
+  });
+
   app.post("/v1/admin/wallpapers", { preHandler: app.authenticateAdmin }, async (request, reply) => {
     const parsed = WallpaperInput.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input", details: parsed.error.flatten() });
