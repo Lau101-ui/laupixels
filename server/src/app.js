@@ -198,7 +198,7 @@ export async function buildApp({ storage: storageOverride } = {}) {
     if (!parsed.success) return reply.code(400).send({ error: "invalid_upload_request" });
     if (!storage) return reply.code(503).send({ error: "storage_not_configured" });
 
-    const uploadKey = "incoming/" + randomUUID();
+    const uploadKey = randomUUID();
     const expiresAt = new Date(Date.now() + UPLOAD_URL_TTL_SECONDS * 1000);
     const upload = await prisma.$transaction(async tx => {
       const created = await tx.mediaUpload.create({
@@ -297,10 +297,10 @@ export async function buildApp({ storage: storageOverride } = {}) {
       const suffix = randomUUID();
       const objectKey = "wallpapers/" + suffix + ".webp";
       const previewKey = "previews/" + suffix + ".webp";
-      finalKeys.push(objectKey, previewKey);
-
       const storedImage = await storage.putObject(objectKey, normalized.imageBuffer);
+      finalKeys.push(storedImage.fileId);
       const storedPreview = await storage.putObject(previewKey, normalized.previewBuffer);
+      finalKeys.push(storedPreview.fileId);
 
       const imageUrl = storedImage.url;
       const previewUrl = storedPreview.url;
@@ -333,7 +333,7 @@ export async function buildApp({ storage: storageOverride } = {}) {
         });
       });
 
-      await storage.deleteUploadObject(upload.uploadKey).catch(() => {});
+      await storage.deleteUploadObject(body.data.fileId).catch(() => {});
       return reply.code(200).send({
         uploadId: upload.id,
         imageUrl,
