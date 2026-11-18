@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "server/**"
+      - "server/**"\n      - "admin.js"\n      - "admin.html"\n      - ".github/workflows/pages.yml"
       - ".github/workflows/ci.yml"
       - "docker-compose.yml"
   push:
