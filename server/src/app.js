@@ -7,7 +7,7 @@ import jwt from "@fastify/jwt";
 import argon2 from "argon2";
 import { z } from "zod";
 import { PrismaClient } from "@prisma/client";
-import { createR2Storage, UPLOAD_URL_TTL_SECONDS } from "./storage/r2.js";
+import { createImageKitStorage, UPLOAD_URL_TTL_SECONDS } from "./storage/imagekit.js";
 import { InvalidImageError, MAX_IMAGE_BYTES, normalizeImage } from "./storage/image.js";
 
 const prisma = new PrismaClient();
@@ -60,7 +60,7 @@ function allowedAssetUrl(value, hosts) {
 }
 
 export async function buildApp({ storage: storageOverride } = {}) {
-  const storage = storageOverride === undefined ? createR2Storage() : storageOverride;
+  const storage = storageOverride === undefined ? createImageKitStorage() : storageOverride;
   const app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL || "info",
@@ -223,12 +223,12 @@ export async function buildApp({ storage: storageOverride } = {}) {
     });
 
     try {
-      const uploadUrl = await storage.createUploadUrl(upload.uploadKey, upload.expectedContentType);
+      const uploadAuth = await storage.createUploadUrl(upload.uploadKey);
       return reply.code(201).send({
         uploadId: upload.id,
-        method: "PUT",
-        uploadUrl,
-        headers: { "Content-Type": upload.expectedContentType },
+        provider: "imagekit",
+        uploadAuth,
+        uploadOptions: { fileName: upload.uploadKey, folder: "/laupixels/incoming" },
         maxBytes: MAX_IMAGE_BYTES,
         expectedBytes: upload.expectedSizeBytes,
         expiresAt: upload.expiresAt.toISOString()
@@ -247,7 +247,8 @@ export async function buildApp({ storage: storageOverride } = {}) {
     config: { rateLimit: { max: 20, timeWindow: "1 hour" } }
   }, async (request, reply) => {
     const parsedId = z.string().min(1).max(100).safeParse(request.params.id);
-    if (!parsedId.success) return reply.code(400).send({ error: "invalid_upload_id" });
+    const body = z.object({ fileId: z.string().min(1).max(200) }).strict().safeParse(request.body);
+    if (!parsedId.success || !body.success) return reply.code(400).send({ error: "invalid_upload_id" });
     if (!storage) return reply.code(503).send({ error: "storage_not_configured" });
 
     const upload = await prisma.mediaUpload.findFirst({
@@ -257,7 +258,6 @@ export async function buildApp({ storage: storageOverride } = {}) {
     if (upload.status === "READY") return reply.code(409).send({ error: "upload_already_completed" });
     if (upload.status !== "PENDING") return reply.code(409).send({ error: "upload_not_pending" });
     if (upload.expiresAt.getTime() <= Date.now()) {
-      await storage.deleteUploadObject(upload.uploadKey).catch(() => {});
       await prisma.mediaUpload.update({ where: { id: upload.id }, data: { status: "EXPIRED" } });
       return reply.code(410).send({ error: "upload_expired" });
     }
@@ -271,12 +271,11 @@ export async function buildApp({ storage: storageOverride } = {}) {
 
     const finalKeys = [];
     try {
-      const head = await storage.headObject(upload.uploadKey);
+      const head = await storage.headObject(body.data.fileId, upload.uploadKey);
       if (
-        Number(head.ContentLength) !== upload.expectedSizeBytes ||
-        head.ContentType !== upload.expectedContentType
+        Number(head.size) !== upload.expectedSizeBytes
       ) {
-        await storage.deleteUploadObject(upload.uploadKey).catch(() => {});
+        await storage.deleteUploadObject(body.data.fileId).catch(() => {});
         await prisma.mediaUpload.update({
           where: { id: upload.id },
           data: { status: "REJECTED", processingStartedAt: null }
@@ -284,9 +283,9 @@ export async function buildApp({ storage: storageOverride } = {}) {
         return reply.code(422).send({ error: "uploaded_file_mismatch" });
       }
 
-      const input = await storage.getObjectBuffer(upload.uploadKey);
+      const input = await storage.getObjectBuffer(head.url);
       if (input.length !== upload.expectedSizeBytes || input.length > MAX_IMAGE_BYTES) {
-        await storage.deleteUploadObject(upload.uploadKey).catch(() => {});
+        await storage.deleteUploadObject(body.data.fileId).catch(() => {});
         await prisma.mediaUpload.update({
           where: { id: upload.id },
           data: { status: "REJECTED", processingStartedAt: null }
@@ -300,11 +299,11 @@ export async function buildApp({ storage: storageOverride } = {}) {
       const previewKey = "previews/" + suffix + ".webp";
       finalKeys.push(objectKey, previewKey);
 
-      await storage.putObject(objectKey, normalized.imageBuffer);
-      await storage.putObject(previewKey, normalized.previewBuffer);
+      const storedImage = await storage.putObject(objectKey, normalized.imageBuffer);
+      const storedPreview = await storage.putObject(previewKey, normalized.previewBuffer);
 
-      const imageUrl = storage.publicUrl(objectKey);
-      const previewUrl = storage.publicUrl(previewKey);
+      const imageUrl = storedImage.url;
+      const previewUrl = storedPreview.url;
       const outputSizeBytes = normalized.imageBuffer.length;
 
       await prisma.$transaction(async tx => {
@@ -312,8 +311,8 @@ export async function buildApp({ storage: storageOverride } = {}) {
           where: { id: upload.id },
           data: {
             status: "READY",
-            objectKey,
-            previewKey,
+            objectKey: storedImage.fileId,
+            previewKey: storedPreview.fileId,
             imageUrl,
             previewUrl,
             outputSizeBytes,
