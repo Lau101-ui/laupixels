@@ -76,6 +76,16 @@ npm run db:validate
 
 The API smoke tests cover liveness, CORS rejection, login request validation and protection of admin write routes. They do not replace integration tests against a running PostgreSQL database. The same checks and a Docker image build run in GitHub Actions for pull requests and pushes to `main`.
 
+## Neon Managed Better Auth
+
+The static PWA includes an email/password account panel powered by Neon's Managed Better Auth SDK. The browser SDK is loaded as an ES module from esm.sh; the public branch Auth URL is configured in the module in `index.html`. The Auth URL is public configuration, not a secret. Passwords and auth records are handled by Neon; this frontend does not store passwords.
+
+Email sign-up and sign-in are enabled on the Neon `production` branch. Email verification is currently disabled in the Neon Console, so new accounts are not required to prove mailbox ownership. Enable verification and configure the email provider before treating accounts as verified identities.
+
+The account panel calls `signUp.email`, `signIn.email`, `getSession`, and `signOut`. Session persistence depends on the browser accepting the Managed Auth session cookies. Some browsers block cross-site cookies for a GitHub Pages origin; if session restoration fails, use a supported same-site custom-domain/proxy setup rather than weakening authentication.
+
+A live signup against Neon and a real-user session read still need to be performed in a browser. GitHub Actions currently validates the API backend and does not exercise browser-to-Neon authentication.
+
 ## Important current boundaries
 
 This is a development foundation, not a completed commercial backend. The frontend catalogue is still a local seed collection and is not yet connected to the API. There is no image-upload endpoint, object-storage integration, administrator UI, MFA, session revocation, payment system, moderation workflow or production deployment. Do not represent these as implemented. Read `SECURITY.md` before deployment.
