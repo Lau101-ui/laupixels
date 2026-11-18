@@ -7,6 +7,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum MediaUploadStatus {
+  PENDING
+  PROCESSING
+  READY
+  REJECTED
+  EXPIRED
+}
+
 model Admin {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -15,6 +23,7 @@ model Admin {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   auditLogs    AdminAuditLog[]
+  uploads      MediaUpload[]
 }
 
 model AdminAuditLog {
@@ -31,19 +40,49 @@ model AdminAuditLog {
   @@index([entity, entityId, createdAt])
 }
 
+model MediaUpload {
+  id                   String            @id @default(cuid())
+  adminId              String
+  status               MediaUploadStatus @default(PENDING)
+  uploadKey            String            @unique
+  objectKey            String?           @unique
+  previewKey           String?           @unique
+  imageUrl             String?           @unique
+  previewUrl           String?
+  expectedContentType  String
+  expectedSizeBytes    Int
+  outputSizeBytes      Int?
+  width                Int?
+  height               Int?
+  expiresAt            DateTime
+  processingStartedAt  DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime          @default(now())
+  admin                Admin             @relation(fields: [adminId], references: [id], onDelete: Restrict)
+  imageFor             Wallpaper?        @relation("WallpaperImage")
+  previewFor           Wallpaper?        @relation("WallpaperPreview")
+
+  @@index([adminId, status, createdAt])
+  @@index([status, expiresAt])
+}
+
 model Wallpaper {
-  id          String   @id @default(cuid())
-  slug        String   @unique
-  title       String
-  description String
-  category    String
-  imageUrl    String
-  previewUrl  String?
-  width       Int?
-  height      Int?
-  isPublished Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String       @id @default(cuid())
+  slug           String       @unique
+  title          String
+  description    String
+  category       String
+  imageUrl       String
+  previewUrl     String?
+  imageUploadId  String?      @unique
+  previewUploadId String?     @unique
+  width          Int?
+  height         Int?
+  isPublished    Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  imageUpload    MediaUpload? @relation("WallpaperImage", fields: [imageUploadId], references: [id], onDelete: SetNull)
+  previewUpload  MediaUpload? @relation("WallpaperPreview", fields: [previewUploadId], references: [id], onDelete: SetNull)
 
   @@index([category, isPublished, createdAt])
 }
