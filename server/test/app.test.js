@@ -36,6 +36,14 @@ test("CORS rejects an origin outside the allowlist", async () => {
   assert.equal(response.json().error, "origin_not_allowed");
 });
 
+test("admin JWT signing places the administrator ID in the sub claim", async () => {
+  const token = app.jwt.sign({ role: "admin" }, { sub: "test-admin-id" });
+  const claims = app.jwt.decode(token);
+
+  assert.equal(claims.role, "admin");
+  assert.equal(claims.sub, "test-admin-id");
+});
+
 test("admin login rejects a request with a missing password", async () => {
   const response = await app.inject({
     method: "POST",
