@@ -166,7 +166,7 @@ export async function buildApp({ storage: storageOverride } = {}) {
     const admin = await prisma.admin.findUnique({ where: { email } });
     const valid = admin?.isActive && await argon2.verify(admin.passwordHash, request.body.password).catch(() => false);
     if (!valid) return reply.code(401).send({ error: "invalid_credentials" });
-    const token = app.jwt.sign({ role: "admin" }, { subject: admin.id });
+    const token = app.jwt.sign({ role: "admin" }, { sub: admin.id });
     return { accessToken: token, tokenType: "Bearer", expiresIn: 900 };
   });
 
