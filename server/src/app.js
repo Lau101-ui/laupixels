@@ -374,7 +374,9 @@ export async function buildApp({ storage: storageOverride } = {}) {
       }, "upload completion failed");
       return reply.code(500).send({
         error: "upload_completion_failed",
-        stage: completionStage
+        stage: completionStage,
+        reason: error?.code || error?.name || "unknown_error",
+        providerStatus: Number.isInteger(error?.status) ? error.status : undefined
       });
     }
   });
