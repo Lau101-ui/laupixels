@@ -270,6 +270,7 @@ export async function buildApp({ storage: storageOverride } = {}) {
     if (claim.count !== 1) return reply.code(409).send({ error: "upload_already_processing" });
 
     const finalKeys = [];
+    let completionStage = "verify_imagekit_upload";
     try {
       const head = await storage.headObject(body.data.fileId, upload.uploadKey);
       if (
@@ -283,6 +284,7 @@ export async function buildApp({ storage: storageOverride } = {}) {
         return reply.code(422).send({ error: "uploaded_file_mismatch" });
       }
 
+      completionStage = "download_original";
       const input = await storage.getObjectBuffer(head.url);
       if (input.length !== upload.expectedSizeBytes || input.length > MAX_IMAGE_BYTES) {
         await storage.deleteUploadObject(body.data.fileId).catch(() => {});
@@ -293,12 +295,15 @@ export async function buildApp({ storage: storageOverride } = {}) {
         return reply.code(422).send({ error: "uploaded_file_mismatch" });
       }
 
+      completionStage = "process_image";
       const normalized = await normalizeImage(input, upload.expectedContentType);
       const suffix = randomUUID();
       const objectKey = "wallpapers/" + suffix + ".webp";
       const previewKey = "previews/" + suffix + ".webp";
+      completionStage = "store_full_image";
       const storedImage = await storage.putObject(objectKey, normalized.imageBuffer);
       finalKeys.push(storedImage.fileId);
+      completionStage = "store_preview";
       const storedPreview = await storage.putObject(previewKey, normalized.previewBuffer);
       finalKeys.push(storedPreview.fileId);
 
@@ -306,6 +311,7 @@ export async function buildApp({ storage: storageOverride } = {}) {
       const previewUrl = storedPreview.url;
       const outputSizeBytes = normalized.imageBuffer.length;
 
+      completionStage = "save_upload_record";
       await prisma.$transaction(async tx => {
         await tx.mediaUpload.update({
           where: { id: upload.id },
@@ -358,7 +364,18 @@ export async function buildApp({ storage: storageOverride } = {}) {
         where: { id: upload.id, status: "PROCESSING" },
         data: { status: "PENDING", processingStartedAt: null }
       }).catch(() => {});
-      throw error;
+      request.log.error({
+        uploadId: upload.id,
+        stage: completionStage,
+        errorName: error?.name,
+        errorMessage: error?.message,
+        errorCode: error?.code,
+        errorStatus: error?.status
+      }, "upload completion failed");
+      return reply.code(500).send({
+        error: "upload_completion_failed",
+        stage: completionStage
+      });
     }
   });
 
