@@ -29,6 +29,7 @@ export function createImageKitStorage(env = process.env) {
     if (!response.ok) {
       const error = new Error("ImageKit API request failed with status " + response.status);
       error.status = response.status;
+      error.code = "imagekit_api_rejected";
       throw error;
     }
     return response.status === 204 ? null : response.json();
@@ -45,11 +46,32 @@ export function createImageKitStorage(env = process.env) {
     async headObject(fileId, expectedFileName) {
       const file = await api("/files/" + encodeURIComponent(fileId));
       const expectedPath = "/laupixels/incoming/" + expectedFileName;
-      if (file.filePath !== expectedPath || file.fileType !== "image" || !Number.isFinite(Number(file.size))) {
-        throw new Error("ImageKit upload does not match the expected upload intent.");
+      if (file.filePath !== expectedPath) {
+        const error = new Error("ImageKit upload path does not match the upload intent.");
+        error.code = "imagekit_path_mismatch";
+        throw error;
       }
-      const url = new URL(file.url);
-      if (url.protocol !== "https:" || url.hostname !== host) throw new Error("ImageKit returned an unexpected media URL.");
+      if (file.fileType !== "image") {
+        const error = new Error("ImageKit file is not classified as an image.");
+        error.code = "imagekit_file_type_mismatch";
+        throw error;
+      }
+      if (!Number.isFinite(Number(file.size))) {
+        const error = new Error("ImageKit returned an invalid file size.");
+        error.code = "imagekit_invalid_file_size";
+        throw error;
+      }
+      let url;
+      try { url = new URL(file.url); } catch {
+        const error = new Error("ImageKit returned an invalid media URL.");
+        error.code = "imagekit_invalid_media_url";
+        throw error;
+      }
+      if (url.protocol !== "https:" || url.hostname !== host) {
+        const error = new Error("ImageKit media URL host does not match configured endpoint.");
+        error.code = "imagekit_media_host_mismatch";
+        throw error;
+      }
       return file;
     },
 
